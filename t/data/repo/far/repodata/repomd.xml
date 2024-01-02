@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<repomd xmlns="http://linux.duke.edu/metadata/repo" xmlns:rpm="http://linux.duke.edu/metadata/rpm">
+  <revision>1702231924</revision>
+  <tags>
+    <repo>obsrepository://build.opensuse.org/home:viklequick/openSUSE_Tumbleweed</repo>
+    <repo>obsbuildid:1682281448</repo>
+  </tags>
+  <data type="primary">
+    <checksum type="sha512">54bb729f732faa4e3ba8b51408d30d582acd1a145fcb14e1dbe43ec579662c218736019f3684daa9853454828a294a54ceddbd5850e50a403a9540a4604f3c9e</checksum>
+    <open-checksum type="sha512">5624dee9adce2f720097175d3d72beaecac267be1d9733b5c8a62e44bae55ddfbd2a1383bd842c577fd384c799587285a26beedbc94ec2998250f372dced92bb</open-checksum>
+    <location href="repodata/54bb729f732faa4e3ba8b51408d30d582acd1a145fcb14e1dbe43ec579662c218736019f3684daa9853454828a294a54ceddbd5850e50a403a9540a4604f3c9e-primary.xml.gz"/>
+    <timestamp>1702231924</timestamp>
+    <size>5304</size>
+    <open-size>45447</open-size>
+  </data>
+  <data type="filelists">
+    <checksum type="sha512">f49795841f706ff23a01f0ed3bc5128380951b4d123ac2f7b7f464e6f5d95513fe45661e92457e91bfedf9636655a29ca92395190db388603d6fb9f386fce98b</checksum>
+    <open-checksum type="sha512">7489a69fbdda613e1fa058226f7ed625a2735353f61ecc9ebe7b1bf1abced734ed7da9d7ce6f6bd9b43b2b3a18536f16c4857a2da25562be05212a2dd7d83e01</open-checksum>
+    <location href="repodata/f49795841f706ff23a01f0ed3bc5128380951b4d123ac2f7b7f464e6f5d95513fe45661e92457e91bfedf9636655a29ca92395190db388603d6fb9f386fce98b-filelists.xml.gz"/>
+    <timestamp>1702231924</timestamp>
+    <size>6565</size>
+    <open-size>56433</open-size>
+  </data>
+  <data type="other">
+    <checksum type="sha512">b3326ba3233495e2943d0f0b2034eeead0420073d438089b9c4e6f331c84ba17fcbab46a8dd9954282dec2846a784a935a30627b90671b35e14127f78b510fbe</checksum>
+    <open-checksum type="sha512">6e10d887fbba9c0d57e6e4c9f8e299c6aeb7aa202b47d53b933fd432ed01a9464fff420b15ca9b33a2e8af7baa430280c72274631259d8b01f31fa137f9a20e5</open-checksum>
+    <location href="repodata/b3326ba3233495e2943d0f0b2034eeead0420073d438089b9c4e6f331c84ba17fcbab46a8dd9954282dec2846a784a935a30627b90671b35e14127f78b510fbe-other.xml.gz"/>
+    <timestamp>1702231924</timestamp>
+    <size>1766</size>
+    <open-size>4556</open-size>
+  </data>
+  <data type="filelists-ext">
+    <checksum type="sha512">537b1bc8b92795b109b78b91a74638fa86440b281bffbdf90b18adfab0eb82b49706862818ac9b898f6735ab69e3191d0dc5a3d7adcc0802bb1e78ee52fd771d</checksum>
+    <open-checksum type="sha512">3e7c2b842c8de9ededeb6dec4880473ab22f0dda427b39aef28cbf41dc44d4f8d276142cc1309a67192e910678ea5fb5432a74e9dab02ca53b94d97d1aea6b9b</open-checksum>
+    <location href="repodata/537b1bc8b92795b109b78b91a74638fa86440b281bffbdf90b18adfab0eb82b49706862818ac9b898f6735ab69e3191d0dc5a3d7adcc0802bb1e78ee52fd771d-filelists-ext.xml.gz"/>
+    <timestamp>1702231924</timestamp>
+    <size>31290</size>
+    <open-size>99645</open-size>
+  </data>
+</repomd>

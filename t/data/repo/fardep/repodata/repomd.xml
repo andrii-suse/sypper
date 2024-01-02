@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<repomd xmlns="http://linux.duke.edu/metadata/repo" xmlns:rpm="http://linux.duke.edu/metadata/rpm">
+  <revision>1650905202</revision>
+  <tags>
+    <repo>obsrepository://build.opensuse.org/home:phoenix.os:depository/openSUSE_Tumbleweed</repo>
+    <repo>obsbuildid:1604908628</repo>
+  </tags>
+  <data type="primary">
+    <checksum type="sha256">007c0a05d5188bf4d61c2d66f2795fe1f920fcc4b5bee78dca88b18d6a890d73</checksum>
+    <open-checksum type="sha256">9a962772174a89f00e2364158d00e999ae8f14e010673e3def1dbc8e563e6dd8</open-checksum>
+    <location href="repodata/007c0a05d5188bf4d61c2d66f2795fe1f920fcc4b5bee78dca88b18d6a890d73-primary.xml.gz"/>
+    <timestamp>1650905202</timestamp>
+    <size>59270</size>
+    <open-size>550254</open-size>
+  </data>
+  <data type="filelists">
+    <checksum type="sha256">084af7131b66ab2263b6f50a4f9a5f9673a92c1eb376b2cd76f1c36c4f9ec39e</checksum>
+    <open-checksum type="sha256">791049ca10027acc7ad0799607640f6ac3e6b83d11cd314f69b4eb36c6c2123c</open-checksum>
+    <location href="repodata/084af7131b66ab2263b6f50a4f9a5f9673a92c1eb376b2cd76f1c36c4f9ec39e-filelists.xml.gz"/>
+    <timestamp>1650905202</timestamp>
+    <size>128272</size>
+    <open-size>1568172</open-size>
+  </data>
+  <data type="other">
+    <checksum type="sha256">964e5eb925459a93d4c1af67a27e37d9b466edd07d3f72acdeb87fa7392a8736</checksum>
+    <open-checksum type="sha256">876d8c03a125475d5f979a5337b646519faf8f185ebc0cb1da1fdb1a1f1b0f0d</open-checksum>
+    <location href="repodata/964e5eb925459a93d4c1af67a27e37d9b466edd07d3f72acdeb87fa7392a8736-other.xml.gz"/>
+    <timestamp>1650905202</timestamp>
+    <size>170809</size>
+    <open-size>1869103</open-size>
+  </data>
+</repomd>

@@ -1,0 +1,2 @@
+mkdir __workdir/cwd
+
