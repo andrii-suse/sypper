@@ -22,7 +22,7 @@ has repodirs => sub { [] };
 
 sub refresh($self, $cfgfile=undef) {
     my $repodirs;
-    if (my $root = $ENV{SYPP_ROOT}) {    
+    if (my $root = $ENV{SYPP_ROOT}) {
         $repodirs = $ENV{SYPP_ROOT} . '/repos.d';
     } else {
         $repodirs = $ENV{SYPP_REPO_DIRS} // $ENV{SYPP_REPO_DIR} // '/etc/zypp/repos.d';

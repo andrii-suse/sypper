@@ -16,17 +16,22 @@
 package Sypp;
 use Mojo::Base -base;
 
+use Data::Dumper;
+use Cwd 'abs_path';
+use File::Basename;
+use File::Path qw( mkpath );
 use Carp ();
+
 use solv;
+
 use Mojo::Log;
+
 use Sypp::Repo::Rpm;
 use Sypp::Repo::System;
-use Data::Dumper;
-
 
 has repos     => sub { [] };
 has repodirs  => sub { Carp::croak 'repodirs are required' };
-has cachedir  => '.';
+has cachedir  => './cache/';
 has pool      => sub { solv::Pool->new };
 has sysrepo   => sub { Carp::croak 'sysrepo is not initialized' };
 
@@ -36,7 +41,9 @@ has debug     => 0;
 
 has version   => '';
 
-sub init { 
+use Data::Dumper;
+
+sub init {
     my $self = shift;
     $self->refresh;
 }
@@ -118,7 +125,7 @@ sub download {
     my $pool = $self->pool;
     my @jobs;
     # print STDERR $self->dumper(\@argv);
-    for my $arg (@args) {  
+    for my $arg (@args) {
         print STDERR "ARG: $arg\n\n";
         my $sel = $pool->select($arg, $flags);
 
@@ -211,11 +218,18 @@ sub download {
             my $repo = $p->{repo}->{appdata};
             my ($location) = $p->lookup_location();
             next unless $location;
+            my $dest = $self->cachedir . '/packages/' . ($repo->alias // 'noalias') . '/' . $location;
+            my $destdir = dirname($dest);
+            -d $destdir || mkpath($destdir) || die "Cannot create path {$destdir}";
             $location = $repo->packagespath() . $location;
             my $chksum = $p->lookup_checksum($solv::SOLVABLE_CHECKSUM);
-            my $f = $repo->download($location, 1, $chksum); 
+            my $f = $repo->download($location, 1, $chksum, undef, $dest);
             die("\n" . $repo->alias . ": $location not found in repository\n") unless $f;
-            # rename 
+            my $fileno = $f->fileno;
+            $f->cloexec(0);
+            my $renamecmd = "cp -l /dev/fd/" . $f->fileno . ' ' . $self->cachedir . '/' . $location;
+            print STDERR Dumper('RRRR:++++', $renamecmd);
+            # system($renamecmd);
             $newpkgsfps{$p->{id}} = $f;
             print ".";
             STDOUT->flush();

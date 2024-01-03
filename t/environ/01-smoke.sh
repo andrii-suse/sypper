@@ -18,4 +18,6 @@ $sy/curl /rest/repo | grep fardep
 
 $sy/download kmodtool
 
-ls -lRa $sy/dt/ | grep -v root_zypper | grep kmodtool
+ls -lRa $sy/cwd/cache/packages/ | grep kmodtool
+
+echo success

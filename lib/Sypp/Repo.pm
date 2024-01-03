@@ -115,7 +115,7 @@ sub download_url {
 }
 
 sub download {
-    my ($self, $file, $uncompress, $chksum, $markincomplete) = @_;
+    my ($self, $file, $uncompress, $chksum, $markincomplete, $dest) = @_;
     if (!$self->baseurl) {
         print $self->alias . ": no baseurl\n";
         return undef;
@@ -123,16 +123,11 @@ sub download {
     my $url = $self->baseurl;
     $url =~ s!/$!!;
     $url .= "/$file";
-#    my $dir = $self->cacheroot . '/' . dirname($file);
-#    print STDERR Dumper('filexxx:', $file, $self->cacheroot, getcwd(), $dir);
-#    system ("mkdir -p $dir 2> /dev/null") == 0 
-#        or die "failed to create $dir. exiting...\n";
-    open(my $f, '+>', undef) || die;
+    open(my $f, '+>', $dest // undef) || die 'Cannot open file {' . ($dest // '<anon>') . '}';
     fcntl($f, Fcntl::F_SETFD, 0);		# turn off CLOEXEC
-#    my $st = system('curl', '-f', '-s', '-L', '-o', $self->cacheroot . '/' . $file, '--', $url);
-    my $st = system('curl', '-f', '-s', '-L', '-o', "/dev/fd/" . fileno($f), '--', $url);
+    my $st = system('curl', '-f', '-s', '-L', '-R', '-o', "/dev/fd/" . fileno($f), '--', $url);
     if (POSIX::lseek(fileno($f), 0, POSIX::SEEK_END) == 0 && ($st == 0 || !$chksum)) {
-      return undef;
+        return undef;
     }
     POSIX::lseek(fileno($f), 0, POSIX::SEEK_SET);
     if ($st) {
