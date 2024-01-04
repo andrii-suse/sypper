@@ -1,3 +1,5 @@
+mkdir -p __workdir/dt
+__workdir/gen_env
 set -a
 source __workdir/conf.env
 set +a

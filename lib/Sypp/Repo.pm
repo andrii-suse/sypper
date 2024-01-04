@@ -22,7 +22,9 @@ use Data::Dumper;
 use Cwd;
 use File::Basename;
 
-has [qw(alias name baseurl type enabled)];
+has [qw(alias name baseurl type enabled verbosity)];
+
+has 'urls' => sub { [] };
 
 has cacheroot => sub { Carp::croak 'cacheroot is not set' };
 
@@ -35,6 +37,12 @@ sub new {
     $self->baseurl($r->{baseurl});
     $self->name   ($r->{name});
     $self->enabled($r->{enabled});
+    my @urls;
+    if (my $urls = $self->baseurl) {
+        @urls = split /[;,\s]+/, $urls;
+    }
+    @{$self->urls} = @urls;
+
     return $self;
 };
 
@@ -75,7 +83,7 @@ sub cachepath {
     $path .= $ext ? "_$ext.solvx" : '.solv';
     $path =~ s!/!_!gs;
     return $self->cacheroot . "/$path";
-} 
+}
 
 
 sub load {
@@ -102,53 +110,48 @@ sub load_ext {
     return 0;
 }
 
-sub download_url {
-    my ($self, $file) = @_;
-    if (!$self->baseurl) {
-        print $self->alias . ": no baseurl\n";
-        return undef;
-    }
-    my $url = $self->baseurl;
-    $url =~ s!/$!!;
-    $url .= "/$file";
-    return $url;
-}
-
 sub download {
     my ($self, $file, $uncompress, $chksum, $markincomplete, $dest) = @_;
+    print STDERR "starting download file: $file\n" if $self->verbosity;
     if (!$self->baseurl) {
         print $self->alias . ": no baseurl\n";
         return undef;
     }
-    my $url = $self->baseurl;
-    $url =~ s!/$!!;
-    $url .= "/$file";
     open(my $f, '+>', $dest // undef) || die 'Cannot open file {' . ($dest // '<anon>') . '}';
     fcntl($f, Fcntl::F_SETFD, 0);		# turn off CLOEXEC
-    my $st = system('curl', '-f', '-s', '-L', '-R', '-o', "/dev/fd/" . fileno($f), '--', $url);
-    if (POSIX::lseek(fileno($f), 0, POSIX::SEEK_END) == 0 && ($st == 0 || !$chksum)) {
-        return undef;
-    }
-    POSIX::lseek(fileno($f), 0, POSIX::SEEK_SET);
-    if ($st) {
-        print "$file: download error #$st\n";
-        $self->{incomplete} = 1 if $markincomplete;
-        return undef;
-    }
-    if ($chksum) {
-        my $fchksum = solv::Chksum->new($chksum->{type});
-        $fchksum->add_fd(fileno($f));
-        if ($fchksum != $chksum) {
-            print "$file: checksum error\n";
-            $self->{incomplete} = 1 if $markincomplete;
-            return undef;
+
+    for my $u (@{$self->urls}) {
+        my $url = $u;
+        next unless $url;
+        $url =~ s!/$!!;
+        $url .= "/$file";
+        print STDERR "trying url: $url\n" if $self->verbosity;
+        system('curl', '-f', '-s', '-L', '-R', '-o', "/dev/fd/" . fileno($f), '--', $url);
+        my $st = $? >> 8;
+        next if (POSIX::lseek(fileno($f), 0, POSIX::SEEK_END) == 0 && ($st == 0 || !$chksum));
+        POSIX::lseek(fileno($f), 0, POSIX::SEEK_SET);
+        if ($st) {
+            print "$file: download error #$st ($url)\n";
+            next;
+        }
+        if ($chksum) {
+            my $fchksum = solv::Chksum->new($chksum->{type});
+            $fchksum->add_fd(fileno($f));
+            if ($fchksum != $chksum) {
+                print "$file: checksum error ($url)\n";
+                next;
+            }
+        }
+        if ($uncompress) {
+            return solv::xfopen_fd($file, fileno($f));
+        } else {
+            return solv::xfopen_fd(undef, fileno($f));
         }
     }
-    if ($uncompress) {
-        return solv::xfopen_fd($file, fileno($f));
-    } else {
-        return solv::xfopen_fd(undef, fileno($f));
-    }
+
+    $self->{incomplete} = 1 if $markincomplete;
+    print "$file: no more mirrors to try\n";
+    return undef;
 }
 
 sub usecachedrepo {

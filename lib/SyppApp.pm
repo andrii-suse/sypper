@@ -31,7 +31,6 @@ sub startup {
     # $self->sypp->dumper($self->dumper);
     $self->plugin('Repos');
     $self->refresh_config;
-    $self->sypp->refresh;
     $self->version($self->sypp->version);
 }
 

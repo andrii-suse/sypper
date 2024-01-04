@@ -38,6 +38,7 @@ has sysrepo   => sub { Carp::croak 'sysrepo is not initialized' };
 has log       => sub { Mojo::Log->new };
 has dumper    => sub { Carp::croak 'dumper is required if debug is enabled' };
 has debug     => 0;
+has verbosity => 0;
 
 has version   => '';
 
@@ -45,7 +46,6 @@ use Data::Dumper;
 
 sub init {
     my $self = shift;
-    $self->refresh;
 }
 
 sub refresh {
@@ -80,6 +80,7 @@ sub refresh_repos {
                 }
                 next unless $repo;
                 $repo->cacheroot($self->cachedir);
+                $repo->verbosity($self->verbosity);
                 push @repos, $repo;
             }
         }
@@ -227,9 +228,6 @@ sub download {
             die("\n" . $repo->alias . ": $location not found in repository\n") unless $f;
             my $fileno = $f->fileno;
             $f->cloexec(0);
-            my $renamecmd = "cp -l /dev/fd/" . $f->fileno . ' ' . $self->cachedir . '/' . $location;
-            print STDERR Dumper('RRRR:++++', $renamecmd);
-            # system($renamecmd);
             $newpkgsfps{$p->{id}} = $f;
             print ".";
             STDOUT->flush();

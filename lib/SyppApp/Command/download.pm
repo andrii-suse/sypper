@@ -21,9 +21,25 @@ has usage       => sub { shift->extract_usage };
 
 sub run {
     my ($self, @args) = @_;
-    
-    # $self->app->sypp->refresh;
-    $self->app->sypp->download(@args);
+    my $verbosity = 0;
+    my @newargs;
+
+    foreach my $a (@args) {
+        my $incr = 0;
+        $incr++ if substr($a,0,2) eq "-v";
+        $incr++ if substr($a,0,3) eq "-vv";
+        $incr++ if substr($a,0,4) eq "-vvv";
+        $incr++ if $a eq "--verbose";
+        if ($incr) {
+            $verbosity = $verbosity + $incr;
+        } else {
+            push @newargs, $a;
+        }
+    }
+
+    $self->app->sypp->verbosity($verbosity) if $verbosity;
+    $self->app->sypp->refresh;
+    $self->app->sypp->download(@newargs);
 }
 
 1;
