@@ -81,6 +81,17 @@ sub refresh_repos {
                 next unless $repo;
                 $repo->cacheroot($self->cachedir);
                 $repo->verbosity($self->verbosity);
+                my $mirrorsfile = "$alias.mirrors";
+                if (-r "$reposdir/$mirrorsfile") {
+                    if (open(my $fh, '<', "$reposdir/$mirrorsfile")) {
+                        while(my $line = <$fh>) {
+                            chomp $line;
+                            push @{$repo->urls}, $line;
+                        }
+                    } else {
+                        print STDERR "Warning: couldn't open $reposdir/$mirrorsfile; ignoring it.";
+                    }
+                }
                 push @repos, $repo;
             }
         }
