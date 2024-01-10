@@ -1,0 +1,13 @@
+FROM opensuse/tumbleweed
+ENV container docker
+
+ENV LANG en_US.UTF-8
+
+# install dependencies
+RUN zypper -vvv -n install vim curl sudo wget m4 make git-core \
+    perl-solv perl-Mojolicious perl-Config-IniFiles
+
+WORKDIR /opt/project
+ENV TZ UTC
+
+ENTRYPOINT ["/usr/bin/tail", "-f", "/dev/null"]
