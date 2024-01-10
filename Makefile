@@ -9,8 +9,8 @@ test_local:
 # test_container:
 #	( cd t/environ; for f in *.sh; do ./$$f && continue; echo FAIL $$f; exit 1 ; done )
 
-test_systemd:
-	( cd t/systemd; for f in *.sh; do ./$$f && continue; echo FAIL $$f; exit 1 ; done )
+test_system:
+	( cd t/system; for f in *.sh; do ./$$f && continue; echo FAIL $$f; exit 1 ; done )
 
 install:
 	for i in lib script; do \
