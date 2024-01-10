@@ -13,10 +13,10 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, see <http://www.gnu.org/licenses/>.
 
-package SyppApp::Command::download;
+package SyppApp::Command::refresh;
 use Mojo::Base 'SyppApp::Command';
 
-has description => 'download packages';
+has description => 'refresh metadata according to repo definitions';
 has usage       => sub { shift->extract_usage };
 
 sub run {
@@ -25,7 +25,6 @@ sub run {
 
     $self->app->sypp->verbosity($verbosity) if $verbosity;
     $self->app->sypp->refresh;
-    $self->app->sypp->download(@args);
 }
 
 1;
@@ -34,13 +33,13 @@ sub run {
 
 =head1 NAME
 
-SyppApp::Command::download - Sypp download package
+SyppApp::Command::refresh - Sypp refresh metadata according to repo definitions
 
 =head1 SYNOPSIS
 
-  Usage: APPLICATION download [package]
+  Usage: APPLICATION refresh [package]
 
-    script/syppper download vim
+    script/syppper refresh
 
 =head1 DESCRIPTION
 

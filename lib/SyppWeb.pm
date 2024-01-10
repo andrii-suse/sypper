@@ -49,6 +49,7 @@ sub startup {
     # $self->secrets([$secret]);
 
     $self->SUPER::startup(@_);
+    $self->sypp->refresh;
 }
 
 sub _setup_webui {

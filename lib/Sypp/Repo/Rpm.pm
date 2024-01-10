@@ -126,5 +126,59 @@ sub load {
     return 1;
 }
 
+sub refresh_mirrors {
+    my $self = shift;
+    print STDERR "Refreshing mirrors for " . $self->alias . "\n" if $self->verbosity > 2;
+    my $baseurl = $self->baseurl;
+    if (!$baseurl) {
+        print $self->alias . ": no baseurl\n";
+        return undef;
+    }
+    $baseurl =~ s!/$!!;
+    my $url = $baseurl . '/repodata/?mirrorlist';
+    my $ua  = Mojo::UserAgent->new->max_redirects(5)->connect_timeout(2)->request_timeout(2);
+    print STDERR "url " . $url . "\n" if $self->verbosity > 2;
+    my $res = $ua->get($url, {'User-Agent' => 'Sypp/refresh_mirrors'})->result;
+    print STDERR "res: " . ($res && $res->code ? $res->code : "undef") . "\n" if $self->verbosity > 2;
+    return undef unless $res && $res->code && $res->code < 300 && $res->code >= 200;
+
+    my $json;
+    eval { $json = $res->json; };
+    print STDERR "no json\n" unless $json;
+    return undef unless $json;
+
+    my @urls;
+    my $limit = 10;
+    # first add mirrors with mtime
+    for my $hash (@$json) {
+        last if @urls > $limit;
+        my $mtime = $hash->{mtime};
+        next unless $mtime;
+        my $url   = $hash->{url};
+
+        push @urls, $url if $url;
+    }
+    # then without mtime if needed
+    for my $hash (@$json) {
+        last if @urls > $limit;
+        my $mtime = $hash->{mtime};
+        next if $mtime;
+        my $url   = $hash->{url};
+        push @urls, $url if $url;
+    }
+    print STDERR "no mirrors\n" if $self->verbosity > 2 && 0 == scalar(@urls);
+    return undef unless @urls;
+    my $mirrorscachefile = $self->cacherootmeta . $self->alias . '.mirrors';
+    print STDERR "opening for writing: $mirrorscachefile\n" if $self->verbosity > 2;
+    open (FH, ">$mirrorscachefile") or do {
+        print STDERR "Cannot open for writing: $mirrorscachefile\n";
+        return undef;
+    };
+    for $url (@urls) {
+        print STDERR "$url\n";
+        print FH "$url\n";
+    }
+    close FH;
+}
 
 1;

@@ -62,6 +62,7 @@ sub refresh_repos {
     my @reposdirs = @{$self->repodirs};
     $self->log->error($self->dumper('PLUGIN::REPO', 'reposdirs', \@reposdirs)) if $self->debug;
 
+    my $repo;
     for my $reposdir (@reposdirs) {
         next unless -d $reposdir;
         my $dir;
@@ -74,27 +75,31 @@ sub refresh_repos {
                 for my $p ($cfg->Parameters($alias)) {
                     $repoattr->{$p} = $cfg->val($alias, $p);
                 }
-                my $repo;
+                $repo = undef;
                 if ($repoattr->{type} eq 'rpm-md') {
                     $repo = Sypp::Repo::Rpm->new($alias, 'repomd', $repoattr);
                 }
                 next unless $repo;
                 $repo->cacheroot($self->cachedir);
                 $repo->verbosity($self->verbosity);
-                my $mirrorsfile = "$alias.mirrors";
-                if (-r "$reposdir/$mirrorsfile") {
-                    if (open(my $fh, '<', "$reposdir/$mirrorsfile")) {
-                        while(my $line = <$fh>) {
-                            chomp $line;
-                            push @{$repo->urls}, $line;
+                for my $mirrorsfile ("$reposdir/$alias.mirrors", $self->cachedir . "/$alias.mirrors") {
+                    if (-r $mirrorsfile) {
+                        if (open(my $fh, '<', $mirrorsfile)) {
+                            while(my $line = <$fh>) {
+                                chomp $line;
+                                push @{$repo->urls}, $line;
+                            }
+                        } else {
+                            print STDERR "Warning: couldn't open $mirrorsfile; ignoring it.";
                         }
-                    } else {
-                        print STDERR "Warning: couldn't open $reposdir/$mirrorsfile; ignoring it.";
                     }
                 }
                 push @repos, $repo;
             }
         }
+    }
+    if ($repo && $repo->cacherootmeta) {
+        mkpath($repo->cacherootmeta) or print STDERR "WRN: Couln't create path: " . $repo->cacherootmeta . "\n";
     }
     $self->log->error($self->dumper('PLUGIN::REPO', '@repos', \@repos)) if $self->debug;
     @{$self->repos} = @repos;
@@ -117,7 +122,9 @@ sub refresh_pool {
     $pool->set_loadcallback(\&_load_stub);
     $self->sysrepo->load($pool);
     for my $r (@{$self->repos}) {
-        $r->load($pool); # TODO if $r->enabled;
+        next unless $r->enabled;
+        next unless $r->load($pool);
+        $r->refresh_mirrors;
     }
     $pool->addfileprovides();
     $pool->createwhatprovides();
@@ -126,7 +133,7 @@ sub refresh_pool {
 
 sub install {
     my ($self, @args) = @_;
-    
+    Carp::croak "Sypp::install is not implemented";
     1;
 }
 
@@ -140,8 +147,6 @@ sub download {
     for my $arg (@args) {
         print STDERR "ARG: $arg\n\n";
         my $sel = $pool->select($arg, $flags);
-
-
         die("nothing matches '$arg'\n") if $sel->isempty();
         push @jobs, $sel->jobs($solv::Job::SOLVER_INSTALL);
     };

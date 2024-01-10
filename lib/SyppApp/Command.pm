@@ -13,19 +13,30 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, see <http://www.gnu.org/licenses/>.
 
-package SyppApp::Command::download;
-use Mojo::Base 'SyppApp::Command';
+package SyppApp::Command;
+use Mojo::Base 'Mojolicious::Command';
 
-has description => 'download packages';
-has usage       => sub { shift->extract_usage };
+sub verbosity {
+    my ($self, $args) = @_;
+    my @args = @$args;
+    my $verbosity = 0;
+    my @newargs;
 
-sub run {
-    my ($self, @args) = @_;
-    my $verbosity = $self->verbosity(\@args);
+    foreach my $a (@args) {
+        my $incr = 0;
+        $incr++ if substr($a,0,2) eq "-v";
+        $incr++ if substr($a,0,3) eq "-vv";
+        $incr++ if substr($a,0,4) eq "-vvv";
+        $incr++ if $a eq "--verbose";
+        if ($incr) {
+            $verbosity = $verbosity + $incr;
+        } else {
+            push @newargs, $a;
+        }
+    }
+    @$args = @newargs if $verbosity;
 
-    $self->app->sypp->verbosity($verbosity) if $verbosity;
-    $self->app->sypp->refresh;
-    $self->app->sypp->download(@args);
+    return $verbosity;
 }
 
 1;

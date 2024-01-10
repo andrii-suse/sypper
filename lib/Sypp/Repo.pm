@@ -28,6 +28,10 @@ has 'urls' => sub { [] };
 
 has cacheroot => sub { Carp::croak 'cacheroot is not set' };
 
+sub cacherootmeta {
+    shift->cacheroot . '/meta/';
+}
+
 sub new {
     my ($class, $alias, $type, $attr) = @_;
     my $r = { %{$attr || {}} };
@@ -37,6 +41,11 @@ sub new {
     $self->baseurl($r->{baseurl});
     $self->name   ($r->{name});
     $self->enabled($r->{enabled});
+    if (defined $r->{enabled}) {
+        $self->enabled($r->{enabled});
+    } else {
+        $self->enabled(1);
+    }
     my @urls;
     if (my $urls = $self->baseurl) {
         @urls = split /[;,\s]+/, $urls;
@@ -47,33 +56,33 @@ sub new {
 };
 
 sub calc_cookie_fp {
-  my ($self, $fp) = @_;
-  my $chksum = solv::Chksum->new($solv::REPOKEY_TYPE_SHA256);
-  $chksum->add("1.1");
-  $chksum->add_fp($fp);
-  return $chksum->raw();
+    my ($self, $fp) = @_;
+    my $chksum = solv::Chksum->new($solv::REPOKEY_TYPE_SHA256);
+    $chksum->add("1.1");
+    $chksum->add_fp($fp);
+    return $chksum->raw();
 }
 
 sub calc_cookie_file {
-  my ($self, $filename) = @_;
-  my $chksum = solv::Chksum->new($solv::REPOKEY_TYPE_SHA256);
-  $chksum->add("1.1");
-  $chksum->add_stat($filename);
-  return $chksum->raw();
+    my ($self, $filename) = @_;
+    my $chksum = solv::Chksum->new($solv::REPOKEY_TYPE_SHA256);
+    $chksum->add("1.1");
+    $chksum->add_stat($filename);
+    return $chksum->raw();
 }
 
 sub calc_cookie_ext {
-  my ($self, $f, $cookie) = @_;
-  my $chksum = solv::Chksum->new($solv::REPOKEY_TYPE_SHA256);
-  $chksum->add("1.1");
-  $chksum->add($cookie);
-  $chksum->add_fstat(fileno($f));
-  return $chksum->raw();
+    my ($self, $f, $cookie) = @_;
+    my $chksum = solv::Chksum->new($solv::REPOKEY_TYPE_SHA256);
+    $chksum->add("1.1");
+    $chksum->add($cookie);
+    $chksum->add_fstat(fileno($f));
+    return $chksum->raw();
 }
 
 sub packagespath {
-  my ($self) = @_;
-  return '';
+    my ($self) = @_;
+    return '';
 }
 
 sub cachepath {
@@ -82,7 +91,7 @@ sub cachepath {
     $path =~ s/^\./_/s;
     $path .= $ext ? "_$ext.solvx" : '.solv';
     $path =~ s!/!_!gs;
-    return $self->cacheroot . "/$path";
+    return $self->cacherootmeta . "$path";
 }
 
 
@@ -104,6 +113,10 @@ sub load {
         return 1;
     }
     return 0;
+}
+
+sub refresh_mirrors {
+
 }
 
 sub load_ext {
@@ -131,14 +144,14 @@ sub download {
         next if (POSIX::lseek(fileno($f), 0, POSIX::SEEK_END) == 0 && ($st == 0 || !$chksum));
         POSIX::lseek(fileno($f), 0, POSIX::SEEK_SET);
         if ($st) {
-            print "$file: download error #$st ($url)\n";
+            print "[WRN] download error #$st ($url)\n" if $self->verbosity;
             next;
         }
         if ($chksum) {
             my $fchksum = solv::Chksum->new($chksum->{type});
             $fchksum->add_fd(fileno($f));
             if ($fchksum != $chksum) {
-                print "$file: checksum error ($url)\n";
+                print "[WRN] checksum error ($url)\n" if $self->verbosity;
                 next;
             }
         }
@@ -189,8 +202,9 @@ sub writecachedrepo {
     # mkdir("/var/cache/solv", 0755) unless -d "/var/cache/solv";
     my ($f, $tmpname);
     eval {
-        ($f, $tmpname) = File::Temp::tempfile(".newsolv-XXXXXX", 'DIR' => $self->cacheroot);
-    };
+        ($f, $tmpname) = File::Temp::tempfile(".newsolv-XXXXXX", 'DIR' => $self->cacherootmeta);
+        1;
+    } or print STDERR $@;
     return unless $f;
     chmod 0444, $f;
     my $ff = solv::xfopen_fd(undef, fileno($f));
@@ -223,7 +237,6 @@ sub writecachedrepo {
         }
     }
     my $res = rename($tmpname, $self->cachepath($ext));
-    print STDERR Dumper('xxxx', $res, $self->cachepath($ext), getcwd());
 }
 
 my %langtags = (

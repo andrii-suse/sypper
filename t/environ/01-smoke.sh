@@ -16,6 +16,11 @@ $sy/start
 $sy/status
 $sy/curl /rest/repo | grep fardep
 
+# ensure the package isn't in the cache yet
+rc=0
+ls -lRa $sy/cwd/cache/packages/ 2>/dev/null | grep kmodtool || rc=$?
+test $rc -gt 0
+
 $sy/download kmodtool
 
 ls -lRa $sy/cwd/cache/packages/ | grep kmodtool
