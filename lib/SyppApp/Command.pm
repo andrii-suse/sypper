@@ -16,27 +16,31 @@
 package SyppApp::Command;
 use Mojo::Base 'Mojolicious::Command';
 
-sub verbosity {
+sub eat {
     my ($self, $args) = @_;
     my @args = @$args;
-    my $verbosity = 0;
+    my $verbosity;
+    my $concurrency;
     my @newargs;
 
-    foreach my $a (@args) {
+    while (my $a = shift @args) {
         my $incr = 0;
         $incr++ if substr($a,0,2) eq "-v";
         $incr++ if substr($a,0,3) eq "-vv";
         $incr++ if substr($a,0,4) eq "-vvv";
         $incr++ if $a eq "--verbose";
         if ($incr) {
-            $verbosity = $verbosity + $incr;
+            $verbosity = ($verbosity // 0) + $incr;
+        } elsif ($a eq '-c' || $a eq '--concurrency') {
+            $concurrency = eval {int(shift @args)};
         } else {
             push @newargs, $a;
         }
     }
-    @$args = @newargs if $verbosity;
+    $self->app->sypp->verbosity($verbosity)     if $verbosity;
+    $self->app->sypp->concurrency($concurrency) if defined $concurrency;
 
-    return $verbosity;
+    @$args = @newargs if $verbosity || defined $concurrency;
 }
 
 1;
