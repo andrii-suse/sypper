@@ -24,7 +24,11 @@ use File::Basename;
 
 has [qw(alias name baseurl type enabled verbosity)];
 
+# has baseurl and eventually all the mirrors
 has 'urls' => sub { [] };
+# the same as urls except the first url from `baseurl` is the last in `mirrors`
+# the idea is that mirrors are preffered to the first address in baseurl
+has 'mirrors' => sub { [] };
 
 has cacheroot => sub { Carp::croak 'cacheroot is not set' };
 
@@ -51,6 +55,8 @@ sub new {
         @urls = split /[;,\s]+/, $urls;
     }
     @{$self->urls} = @urls;
+    @urls = @urls[1..-1, 0];
+    @{$self->mirrors} = @urls;
 
     return $self;
 };
@@ -133,7 +139,7 @@ sub download {
     open(my $f, '+>', $dest // undef) || die 'Cannot open file {' . ($dest // '<anon>') . '}';
     fcntl($f, Fcntl::F_SETFD, 0);		# turn off CLOEXEC
 
-    for my $u (@{$self->urls}) {
+    for my $u (@{$self->mirrors}) {
         my $url = $u;
         next unless $url;
         $url =~ s!/$!!;
