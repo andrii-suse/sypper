@@ -8,8 +8,8 @@ make install
 cd /tmp
 /usr/share/sypper/script/sypper download -vvv go
 
-rpm -i cache/packages/*/*/*rpm
+rpm -i -U -v cache/packages/*/*/*.rpm
 )
 
-go env
+go env | grep GOPATH
 echo success

@@ -144,7 +144,7 @@ sub refresh_mirrors {
 
     my $json;
     eval { $json = $res->json; };
-    print STDERR "no json\n" unless $json;
+    print STDERR "no json\n" if $self->verbosity > 2 && !$json;
     return undef unless $json;
 
     my @urls;
@@ -154,8 +154,7 @@ sub refresh_mirrors {
         last if @urls > $limit;
         my $mtime = $hash->{mtime};
         next unless $mtime;
-        my $url   = $hash->{url};
-
+        (my $url = $hash->{url}) =~ s!repodata\/?$!!;
         push @urls, $url if $url;
     }
     # then without mtime if needed
@@ -163,7 +162,7 @@ sub refresh_mirrors {
         last if @urls > $limit;
         my $mtime = $hash->{mtime};
         next if $mtime;
-        my $url   = $hash->{url};
+        (my $url = $hash->{url}) =~ s!repodata\/?$!!;
         push @urls, $url if $url;
     }
     print STDERR "no mirrors\n" if $self->verbosity > 2 && 0 == scalar(@urls);
@@ -175,9 +174,10 @@ sub refresh_mirrors {
         return undef;
     };
     for $url (@urls) {
-        print STDERR "$url\n";
+        print STDERR "$url\n" if $self->verbosity > 2;
         print FH "$url\n";
     }
+    @{$self->mirrors} = (@urls, @{$self->mirrors});
     close FH;
 }
 

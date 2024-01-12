@@ -21,6 +21,6 @@ rc=0
 grep -v repodata z.log | grep -i Retrieving || rc=$?
 test $rc -gt 0
 )
-go env
+go env | grep GOPATH
 
 echo success

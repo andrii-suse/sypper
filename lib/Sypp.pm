@@ -17,7 +17,7 @@ package Sypp;
 use Mojo::Base -base;
 
 use Data::Dumper;
-use Cwd 'abs_path';
+use Cwd qw(abs_path getcwd);
 use File::Basename;
 use File::Path qw( mkpath );
 use Carp ();
@@ -25,6 +25,7 @@ use Carp ();
 use solv;
 
 use Mojo::Log;
+use Mojo::UserAgent;
 
 use Sypp::Repo::Rpm;
 use Sypp::Repo::System;
@@ -83,16 +84,19 @@ sub refresh_repos {
                 $repo->cacheroot($self->cachedir);
                 $repo->verbosity($self->verbosity);
                 for my $mirrorsfile ("$reposdir/$alias.mirrors", $self->cachedir . "/$alias.mirrors") {
+                    my @oldmirrors = @{$repo->mirrors};
+                    my @moremirrors;
                     if (-r $mirrorsfile) {
                         if (open(my $fh, '<', $mirrorsfile)) {
                             while(my $line = <$fh>) {
                                 chomp $line;
-                                push @{$repo->urls}, $line;
+                                push @moremirrors, $line;
                             }
                         } else {
                             print STDERR "Warning: couldn't open $mirrorsfile; ignoring it.";
                         }
                     }
+                    @{$repo->mirrors} = (@moremirrors, @oldmirrors) if @moremirrors;
                 }
                 push @repos, $repo;
             }
@@ -227,49 +231,102 @@ sub download {
 
     my @newpkgs = $trans->newsolvables();
     my %newpkgsfps;
+    my @allgood = (1);
     if (@newpkgs) {
         my $downloadsize = 0;
         $downloadsize += $_->lookup_num($solv::SOLVABLE_DOWNLOADSIZE) for @newpkgs;
-        printf "Downloading %d packages, %d K\n", scalar(@newpkgs), $downloadsize / 1024;
-        for my $p (@newpkgs) {
+        my $concurrency = 16;
+        my $current = 0;
+        printf "Downloading %d packages, %d K. Concurrency: %d\n", scalar(@newpkgs), $downloadsize / 1024, $concurrency;
+        for (my $i = 0; $i < $concurrency; $i++){
+            my $p = shift @newpkgs;
+            next unless $p;
             my $repo = $p->{repo}->{appdata};
+            my @urls = @{$repo->mirrors};
+            my $url = shift @urls;
             my ($location) = $p->lookup_location();
-            next unless $location;
-            my $dest = $self->cachedir . '/packages/' . ($repo->alias // 'noalias') . '/' . $location;
-            my $destdir = dirname($dest);
-            -d $destdir || mkpath($destdir) || die "Cannot create path {$destdir}";
-            $location = $repo->packagespath() . $location;
-            my $chksum = $p->lookup_checksum($solv::SOLVABLE_CHECKSUM);
-            my $f = $repo->download($location, 1, $chksum, undef, $dest);
-            die("\n" . $repo->alias . ": $location not found in repository\n") unless $f;
-            my $fileno = $f->fileno;
-            $f->cloexec(0);
-            $newpkgsfps{$p->{id}} = $f;
-            print ".";
-            STDOUT->flush();
-        }
+            $url = $url . '/' . $location;
+            my $ua = Mojo::UserAgent->new->request_timeout(300)->connect_timeout(4)->max_redirects(10);
+            my ($next, $then, $catch);
+            my $started = time();
+            $current++;
+            $next = sub {
+                unless ($p && @allgood) {
+                    $current--;
+                    unless ($current) {
+                       Mojo::IOLoop->stop unless $current;
+                    }
+                    return;
+                }
+                $url = shift @urls;
+                unless ($url) {
+                    print STDERR "[CRI] Couldn't download $location from " . $repo->alias . "\n";
+                    shift @allgood;
+                    return Mojo::IOLoop->reset;
+                }
+                $url = $url . '/' . $location;
+                $started = time();
+                print STDERR "trying $url\n" if $self->verbosity;
+                return $ua->get_p($url)->then($then, $catch);
+            };
+
+            $then = sub {
+                my $tx = shift;
+                my $elapsed = int(1000*(time() - $started));
+                my $code = $tx->res->code // 0;
+                print STDERR "got response $code from " . $tx->req->url . "\n" if $self->verbosity;
+                if ($code == 200) {
+                    my $dest = $self->cachedir . '/packages/' . ($repo->alias // 'noalias') . '/' . $location;
+                    eval {
+                        my $destdir = dirname($dest);
+                        -d $destdir || mkpath($destdir) || die "Cannot create path {$destdir}";
+                        $tx->res->content->asset->move_to($dest);
+                        1;
+                    } or do {
+                        print STDERR "[CRI] Cannot save $dest: $@\n";
+                        shift @allgood;
+                        return Mojo::IOLoop->reset;
+                    };
+
+                    $p = shift @newpkgs;
+                    if ($p) {
+                        $repo = $p->{repo}->{appdata};
+                        @urls = @{$repo->mirrors};
+                        ($location) = $p->lookup_location();
+                    }
+                }
+                $next->();
+            };
+
+            $catch = sub {
+                my $err = shift // '<mpty>';
+                my $elapsed = int(1000*(time() - $started));
+                print STDERR "[WRN] error {$err} from $url\n" if $self->verbosity && @allgood;
+                $next->();
+            };
+
+            print STDERR "trying $url\n" if $self->verbosity;
+            $ua->get_p($url)->then($then, $catch);
+        };
+        print "Starting poll\n" if $self->verbosity;
+        Mojo::IOLoop->start;
+        Carp::croak "[INF] Critical error detected. Aborting\n" unless @allgood;
         print "\n";
     }
     print "Committing transaction:\n\n";
     $trans->order();
+    my $needi = 0;
     for my $p ($trans->steps()) {
         my $steptype = $trans->steptype($p, $solv::Transaction::SOLVER_TRANSACTION_RPM_ONLY);
         if ($steptype == $solv::Transaction::SOLVER_TRANSACTION_ERASE) {
-            print "erase ".$p->str()."\n";
-            next unless $p->lookup_num($solv::RPM_RPMDBID);
             my $evr = $p->{evr};
             $evr =~ s/^[0-9]+://;	# strip epoch
-            system('rpm', '-e', '--nodeps', '--nodigest', '--nosignature', "$p->{name}-$evr.$p->{arch}") && die("rpm failed: $?\n");
+            system('echo', 'rpm', '-e', '--nodeps', '--nodigest', '--nosignature', "$p->{name}-$evr.$p->{arch}");
         } elsif ($steptype == $solv::Transaction::SOLVER_TRANSACTION_INSTALL || $steptype == $solv::Transaction::SOLVER_TRANSACTION_MULTIINSTALL) {
-            print "install ".$p->str()."\n";
-            my $f = $newpkgsfps{$p->{id}};
-            my $mode = $steptype == $solv::Transaction::SOLVER_TRANSACTION_INSTALL ? '-U' : '-i';
-            $f->cloexec(0);
-            print STDERR Dumper($p);
-            system('echo', 'rpm', $mode, '--force', '--nodeps', '--nodigest', '--nosignature', "/dev/fd/".$f->fileno()) && die("rpm failed: $?\n");
-            delete $newpkgsfps{$p->{id}};
+            $needi = 1;
         }
     }
+    system('echo', 'rpm', '-i', '--force', '--nodeps', '--nodigest', '--nosignature', getcwd() . "/cache/packages/*/*") if $needi;
 }
 
 sub list {
