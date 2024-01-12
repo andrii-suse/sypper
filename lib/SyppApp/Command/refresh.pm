@@ -21,9 +21,8 @@ has usage       => sub { shift->extract_usage };
 
 sub run {
     my ($self, @args) = @_;
-    my $verbosity = $self->verbosity(\@args);
+    $self->eat(\@args);
 
-    $self->app->sypp->verbosity($verbosity) if $verbosity;
     $self->app->sypp->refresh;
 }
 

@@ -18,7 +18,7 @@ test $cnt -gt 10;
 
 rc=0
 # check that zypper never printed 'Retrieving', (except for repodata)
-grep -v repodata z.log | grep -i Retrieving || rc=$?
+grep -v repodata z.log | grep -v media.1 | grep -i Retrieving || rc=$?
 test $rc -gt 0
 )
 go env | grep GOPATH

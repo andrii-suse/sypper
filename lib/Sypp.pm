@@ -36,6 +36,7 @@ has cachedir  => './cache/';
 has pool      => sub { solv::Pool->new };
 has sysrepo   => sub { Carp::croak 'sysrepo is not initialized' };
 
+has concurrency => 4;
 has log       => sub { Mojo::Log->new };
 has dumper    => sub { Carp::croak 'dumper is required if debug is enabled' };
 has debug     => 0;
@@ -44,10 +45,6 @@ has verbosity => 0;
 has version   => '';
 
 use Data::Dumper;
-
-sub init {
-    my $self = shift;
-}
 
 sub refresh {
     my $self = shift;
@@ -103,7 +100,7 @@ sub refresh_repos {
         }
     }
     if ($repo && $repo->cacherootmeta) {
-        mkpath($repo->cacherootmeta) or print STDERR "WRN: Couln't create path: " . $repo->cacherootmeta . "\n";
+        -d $repo->cacherootmeta or mkpath($repo->cacherootmeta) or print STDERR "WRN: Couldn't create path: " . $repo->cacherootmeta . "\n";
     }
     $self->log->error($self->dumper('PLUGIN::REPO', '@repos', \@repos)) if $self->debug;
     @{$self->repos} = @repos;
@@ -147,15 +144,26 @@ sub download {
     $flags |= $solv::Selection::SELECTION_CANON | $solv::Selection::SELECTION_DOTARCH | $solv::Selection::SELECTION_REL;
     my $pool = $self->pool;
     my @jobs;
-    # print STDERR $self->dumper(\@argv);
     for my $arg (@args) {
         print STDERR "ARG: $arg\n\n";
         my $sel = $pool->select($arg, $flags);
         die("nothing matches '$arg'\n") if $sel->isempty();
         push @jobs, $sel->jobs($solv::Job::SOLVER_INSTALL);
     };
+    unless (@jobs) {
+        my $sel = $pool->Selection_all();
+        my $exit_code=system('grep opensuse-tumbleweed /etc/os-release');
+        if ($exit_code) {
+            print STDERR "will do update\n";
+            push @jobs, $sel->jobs($solv::Job::SOLVER_UPDATE);
+        } else {
+            print STDERR "will do dist-upgrade\n";
+            push @jobs, $sel->jobs($solv::Job::SOLVER_DISTUPGRADE);
+        }
+    }
     my $solver = $pool->Solver();
     $solver->set_flag($solv::Solver::SOLVER_FLAG_SPLITPROVIDES, 1);
+    $solver->set_flag($solv::Solver::SOLVER_FLAG_DUP_ALLOW_VENDORCHANGE, 0);
     while (1) {
         my @problems = $solver->solve(\@jobs);
         last unless @problems;
@@ -199,21 +207,21 @@ sub download {
     print "\nTransaction summary:\n\n";
     for my $c ($trans->classify($solv::Transaction::SOLVER_TRANSACTION_SHOW_OBSOLETES|$solv::Transaction::SOLVER_TRANSACTION_OBSOLETE_IS_UPGRADE)) {
         if ($c->{type} == $solv::Transaction::SOLVER_TRANSACTION_ERASE) {
-            print "$c->{count} erased packages:\n";
+            print "$c->{count} packages to erase:\n";
         } elsif ($c->{type} == $solv::Transaction::SOLVER_TRANSACTION_INSTALL) {
-            print "$c->{count} installed packages:\n";
+            print "$c->{count} packages to install:\n";
         } elsif ($c->{type} == $solv::Transaction::SOLVER_TRANSACTION_REINSTALLED) {
-            print "$c->{count} reinstalled packages:\n";
+            print "$c->{count} packages to reinstall:\n";
         } elsif ($c->{type} == $solv::Transaction::SOLVER_TRANSACTION_DOWNGRADED) {
-            print "$c->{count} downgraded packages:\n";
+            print "$c->{count} packages to downgrade:\n";
         } elsif ($c->{type} == $solv::Transaction::SOLVER_TRANSACTION_CHANGED) {
-            print "$c->{count} changed packages:\n";
+            print "$c->{count} packages to change:\n";
         } elsif ($c->{type} == $solv::Transaction::SOLVER_TRANSACTION_UPGRADED) {
-            print "$c->{count} upgraded packages:\n";
+            print "$c->{count} packages to upgrade:\n";
         } elsif ($c->{type} == $solv::Transaction::SOLVER_TRANSACTION_VENDORCHANGE) {
-            printf "$c->{count} vendor changes from '%s' to '%s':\n", $c->{fromstr}, $c->{tostr};
+            printf "$c->{count} to change vendor from '%s' to '%s':\n", $c->{fromstr}, $c->{tostr};
         } elsif ($c->{type} == $solv::Transaction::SOLVER_TRANSACTION_ARCHCHANGE) {
-            printf "$c->{count} arch changes from '%s' to '%s':\n", $c->{fromstr}, $c->{tostr};
+            printf "$c->{count} to change arch from '%s' to '%s':\n", $c->{fromstr}, $c->{tostr};
         } else {
             next;
         }
@@ -235,7 +243,7 @@ sub download {
     if (@newpkgs) {
         my $downloadsize = 0;
         $downloadsize += $_->lookup_num($solv::SOLVABLE_DOWNLOADSIZE) for @newpkgs;
-        my $concurrency = 16;
+        my $concurrency = $self->concurrency;
         my $current = 0;
         printf "Downloading %d packages, %d K. Concurrency: %d\n", scalar(@newpkgs), $downloadsize / 1024, $concurrency;
         for (my $i = 0; $i < $concurrency; $i++){
@@ -250,6 +258,7 @@ sub download {
             my ($next, $then, $catch);
             my $started = time();
             $current++;
+            my $ii = $i;
             $next = sub {
                 unless ($p && @allgood) {
                     $current--;
@@ -266,7 +275,7 @@ sub download {
                 }
                 $url = $url . '/' . $location;
                 $started = time();
-                print STDERR "trying $url\n" if $self->verbosity;
+                print STDERR "[I$ii] trying $url\n" if $self->verbosity;
                 return $ua->get_p($url)->then($then, $catch);
             };
 
@@ -274,7 +283,7 @@ sub download {
                 my $tx = shift;
                 my $elapsed = int(1000*(time() - $started));
                 my $code = $tx->res->code // 0;
-                print STDERR "got response $code from " . $tx->req->url . "\n" if $self->verbosity;
+                print STDERR "[I$ii] ($code) from " . $tx->req->url . "\n" if $self->verbosity;
                 if ($code == 200) {
                     my $dest = $self->cachedir . '/packages/' . ($repo->alias // 'noalias') . '/' . $location;
                     eval {
@@ -305,15 +314,16 @@ sub download {
                 $next->();
             };
 
-            print STDERR "trying $url\n" if $self->verbosity;
+            print STDERR "[I$ii] trying $url\n" if $self->verbosity;
             $ua->get_p($url)->then($then, $catch);
         };
         print "Starting poll\n" if $self->verbosity;
+        STDOUT->flush();
         Mojo::IOLoop->start;
         Carp::croak "[INF] Critical error detected. Aborting\n" unless @allgood;
         print "\n";
     }
-    print "Committing transaction:\n\n";
+    print "Use rpm to finish operation (at own risk!):\n\n";
     $trans->order();
     my $needi = 0;
     for my $p ($trans->steps()) {
@@ -321,12 +331,12 @@ sub download {
         if ($steptype == $solv::Transaction::SOLVER_TRANSACTION_ERASE) {
             my $evr = $p->{evr};
             $evr =~ s/^[0-9]+://;	# strip epoch
-            system('echo', 'rpm', '-e', '--nodeps', '--nodigest', '--nosignature', "$p->{name}-$evr.$p->{arch}");
+            system('echo', 'rpm', '-e', '--nodeps', "$p->{name}-$evr.$p->{arch}");
         } elsif ($steptype == $solv::Transaction::SOLVER_TRANSACTION_INSTALL || $steptype == $solv::Transaction::SOLVER_TRANSACTION_MULTIINSTALL) {
             $needi = 1;
         }
     }
-    system('echo', 'rpm', '-i', '--force', '--nodeps', '--nodigest', '--nosignature', getcwd() . "/cache/packages/*/*") if $needi;
+    system('echo', 'rpm', '-iUv', '--force', getcwd() . "/cache/packages/*/*/*rpm") if $needi;
 }
 
 sub list {
