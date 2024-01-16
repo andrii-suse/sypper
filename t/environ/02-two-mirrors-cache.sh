@@ -1,3 +1,4 @@
+#!lib/test-in-container-environ.sh
 set -e
 
 sy=$(environ sy $PWD)

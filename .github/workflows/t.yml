@@ -8,7 +8,14 @@ on:
   pull_request: {}
 
 jobs:
-  test:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: t
+        run: |
+          make test_container
+  t-system:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
