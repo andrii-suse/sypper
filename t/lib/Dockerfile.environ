@@ -1,0 +1,20 @@
+FROM opensuse/leap:15.5
+ENV container docker
+
+ENV LANG en_US.UTF-8
+
+RUN echo 1
+RUN zypper ar -f http://download.opensuse.org/repositories/openSUSE:infrastructure:MirrorCache/15.5 mc
+RUN zypper --gpg-auto-import-keys ref
+
+# general utils
+# services used in test dependencies
+# sypper dependencies
+RUN zypper -vvv -n install vim curl make sudo \
+    environ environ-mirrorcache nginx MirrorCache postgresql-server perl-MaxMind-DB-Reader perl-Mojolicious-Plugin-ClientIP \
+    perl-Mojolicious perl-Config-IniFiles perl-solv
+
+WORKDIR /opt/project
+ENV TZ UTC
+
+ENTRYPOINT ["/usr/bin/tail", "-f", "/dev/null"]

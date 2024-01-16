@@ -1,3 +1,4 @@
+#!lib/test-in-container-environ.sh
 set -e
 
 # export SY_DEBUG_ALL=1;

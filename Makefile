@@ -6,8 +6,8 @@ mkfile_path := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 test_local:
 	( for f in $$(ls -t t/environ/*.sh); do bash -x $$f && continue; echo FAIL $$f; exit 1 ; done )
 
-# test_container:
-#	( cd t/environ; for f in *.sh; do ./$$f && continue; echo FAIL $$f; exit 1 ; done )
+test_container:
+	( cd t/environ; for f in *.sh; do ./$$f && continue; echo FAIL $$f; exit 1 ; done )
 
 test_system:
 	( cd t/system; for f in *.sh; do ./$$f && continue; echo FAIL $$f; exit 1 ; done )
