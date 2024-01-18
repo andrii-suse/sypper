@@ -101,7 +101,7 @@ sub cachepath {
 
 sub load {
     my ($self, $pool) = @_;
-    print "repo: '" . $self->alias() . "' is about to load\n";
+    print "repo: '" . $self->alias() . "' is about to load...";
     $self->{handle} = $pool->add_repo($self->alias);
     $self->{handle}->{appdata} = $self;
     $self->{handle}->{priority} = 99 - ($self->{priority} // 0);

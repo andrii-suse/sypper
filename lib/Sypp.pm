@@ -190,7 +190,7 @@ sub download {
             my $solution = $solutions[$sol - 1];
             for my $element ($solution->elements()) {
                 my $newjob = $element->Job();
-                if ($element->type == $solv::Solver::SOLVER_SOLUTION_JOB) {
+                if ($element->{type} == $solv::Solver::SOLVER_SOLUTION_JOB) {
                     $jobs[$element->{jobidx}] = $newjob;
                 } else {
                     push @jobs, $newjob if $newjob && !grep {$_ == $newjob} @jobs;
