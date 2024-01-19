@@ -39,6 +39,7 @@ has sysrepo   => sub { Carp::croak 'sysrepo is not initialized' };
 has concurrency => 4;
 has log       => sub { Mojo::Log->new };
 has dumper    => sub { Carp::croak 'dumper is required if debug is enabled' };
+has force     => 0;
 has debug     => 0;
 has verbosity => 0;
 
@@ -124,7 +125,7 @@ sub refresh_pool {
     $self->sysrepo->load($pool);
     for my $r (@{$self->repos}) {
         next unless $r->enabled;
-        next unless $r->load($pool);
+        next unless $r->load($pool, $self->force);
         $r->refresh_mirrors;
     }
     $pool->addfileprovides();
