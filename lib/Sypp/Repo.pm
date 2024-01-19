@@ -22,7 +22,7 @@ use Data::Dumper;
 use Cwd;
 use File::Basename;
 
-has [qw(alias name baseurl type enabled verbosity)];
+has [qw(alias name baseurl type enabled autorefresh verbosity)];
 
 # has baseurl
 has 'urls' => sub { [] };
@@ -43,11 +43,15 @@ sub new {
     $self->type($type);
     $self->baseurl($r->{baseurl});
     $self->name   ($r->{name});
-    $self->enabled($r->{enabled});
     if (defined $r->{enabled}) {
         $self->enabled($r->{enabled});
     } else {
         $self->enabled(1);
+    }
+    if (defined $r->{autorefresh}) {
+        $self->autorefresh($r->{autorefresh});
+    } else {
+        $self->autorefresh(1);
     }
     my @urls;
     if (my $urls = $self->baseurl) {
@@ -100,13 +104,13 @@ sub cachepath {
 
 
 sub load {
-    my ($self, $pool) = @_;
+    my ($self, $pool, $force) = @_;
     print "repo: '" . $self->alias() . "' is about to load...";
     $self->{handle} = $pool->add_repo($self->alias);
     $self->{handle}->{appdata} = $self;
     $self->{handle}->{priority} = 99 - ($self->{priority} // 0);
-    my $dorefresh = 1; # TODO $self->{autorefresh};
-    if ($dorefresh) {
+    my $dorefresh = $self->{autorefresh} || $force;
+    if ($dorefresh && !$force) {
         my @s = stat($self->cachepath);
         $dorefresh = 0 if @s && ($self->{metadata_expire} == -1 || time() - $s[9] < $self->{metadata_expire});
     }

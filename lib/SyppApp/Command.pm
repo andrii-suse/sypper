@@ -21,6 +21,7 @@ sub eat {
     my @args = @$args;
     my $verbosity;
     my $concurrency;
+    my $force;
     my @newargs;
 
     while (my $a = shift @args) {
@@ -33,12 +34,15 @@ sub eat {
             $verbosity = ($verbosity // 0) + $incr;
         } elsif ($a eq '-c' || $a eq '--concurrency') {
             $concurrency = eval {int(shift @args)};
+        } elsif ($a eq '-f' || $a eq '--force') {
+            $force = 1;
         } else {
             push @newargs, $a;
         }
     }
     $self->app->sypp->verbosity($verbosity)     if $verbosity;
     $self->app->sypp->concurrency($concurrency) if defined $concurrency;
+    $self->app->sypp->force($force)             if defined $force;
 
     @$args = @newargs if $verbosity || defined $concurrency;
 }
