@@ -8,8 +8,8 @@ make install
 cd /tmp
 
 /usr/share/sypper/script/sypper download -vvv go
-cp -r cache/packages/* /var/cache/zypp/packages/
 
+# when running as root sypper will use /var/cache/zypp, so zypper should just pick up rpms
 zypper -nvvv in go | tee z.log
 
 cnt=$(grep 'In cache' z.log | wc -l)

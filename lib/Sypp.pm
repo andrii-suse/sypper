@@ -17,7 +17,7 @@ package Sypp;
 use Mojo::Base -base;
 
 use Data::Dumper;
-use Cwd qw(abs_path getcwd);
+use Cwd qw(abs_path);
 use File::Basename;
 use File::Path qw( mkpath );
 use Carp ();
@@ -34,6 +34,7 @@ use Sypp::Repo::System;
 has repos     => sub { [] };
 has repodirs  => sub { Carp::croak 'repodirs are required' };
 has cachedir  => './cache/';
+
 has pool      => sub { solv::Pool->new };
 has sysrepo   => sub { Carp::croak 'sysrepo is not initialized' };
 
@@ -493,7 +494,7 @@ sub download {
             $needi = 1;
         }
     }
-    system('echo', 'rpm', '-iUv', '--force', getcwd() . "/cache/packages/*/*/*rpm") if $needi;
+    system('echo', 'rpm', '-iUv', '--force', $self->cachedir . "/packages/*/*/*rpm") if $needi;
 }
 
 sub list {

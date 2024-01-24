@@ -38,6 +38,9 @@ sub refresh_config {
     my ($self) = @_;
     $self->syconfig->refresh;
     $self->sypp->repodirs($self->syconfig->repodirs);
+    if (my $cachedir = $self->syconfig->cachedir) {
+        $self->sypp->cachedir($cachedir);
+    }
 }
 
 sub run { __PACKAGE__->new->start }

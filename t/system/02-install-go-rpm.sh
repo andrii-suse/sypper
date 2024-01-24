@@ -6,7 +6,7 @@ make install
 
 (
 cd /tmp
-/usr/share/sypper/script/sypper download -vvv -c 32 go
+SYPP_CACHEDIR=$(pwd)/cache /usr/share/sypper/script/sypper download -vvv -c 32 go
 
 rpm -i -U -v cache/packages/*/*/*.rpm
 )
