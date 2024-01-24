@@ -27,6 +27,7 @@ use solv;
 use Mojo::Log;
 use Mojo::UserAgent;
 
+use Sypp::Repo;
 use Sypp::Repo::Rpm;
 use Sypp::Repo::System;
 
@@ -44,8 +45,6 @@ has debug     => 0;
 has verbosity => 0;
 
 has version   => '';
-
-use Data::Dumper;
 
 sub refresh {
     my $self = shift;
@@ -121,13 +120,172 @@ sub refresh_pool {
     my $self = shift;
     my $pool = $self->pool;
     $pool->setarch();
-    $pool->set_loadcallback(\&_load_stub);
+    # $pool->set_loadcallback(\&_load_stub); do not load filelists for now because they are too heavy
     $self->sysrepo->load($pool);
-    for my $r (@{$self->repos}) {
-        next unless $r->enabled;
-        next unless $r->load($pool, $self->force);
-        $r->refresh_mirrors;
+    my $concurrency = $self->concurrency;
+    my @allgood = (1);
+    my @repos = @{$self->repos};
+    my $current = 0;
+    print STDERR "Refreshing repos with concurrency $concurrency\n" if $self->verbosity > 1;
+    my $retry = 0;
+    my $ua = Mojo::UserAgent->new->connect_timeout(3)->request_timeout(10)->max_redirects(6);
+    for (my $i = 0; $i < $concurrency; $i++) {
+        my $repo;
+        my @urls;
+        # do not do concurrency for all repos that are cached or disabled
+        while(1) {
+            $repo = shift @repos;
+            last if !$repo;
+            print STDERR "Repo: " . ($repo->alias // 'unnamed') . "; enabled: " . ($repo->enabled // 'no') .  "\n" if $self->verbosity > 1;
+            next if !$repo->enabled;
+            $repo->{handle} = $pool->add_repo($repo->{alias});
+            $repo->{handle}->{appdata} = $repo;
+            $repo->{handle}->{priority} = 99 - ($repo->{priority} // 0);
+            # first try to load from cache
+            next if Sypp::Repo::load($repo, $pool, $self->force);
+            print "\n";
+            STDOUT->flush();
+            @urls = @{$repo->mirrors};
+            last;
+        }
+        last unless $repo;
+
+        my ($next_repomd,  $then_repomd,  $catch);
+        my ($next_primary, $wrap1, $wrap, $catch_primary);
+        $current++;
+        my $url;
+        my $ii = $i;
+        my $cachedir = $self->cachedir;
+
+        $next_repomd = sub {
+            unless ($repo && @allgood) {
+                $current--;
+                Mojo::IOLoop->stop unless ($current);
+                return;
+            }
+            $url = shift @urls;
+            unless ($url) {
+                print STDERR "[CRI] No more mirrors to try downloading repodata from " . $repo->alias . "\n";
+                shift @allgood;
+                return Mojo::IOLoop->reset;
+            }
+            $url = $url . '/repodata/repomd.xml';
+            print STDERR "[I$ii] trying $url\n" if $self->verbosity;
+            return $ua->get_p($url)->then($then_repomd, $catch);
+        };
+
+        $then_repomd = sub {
+            my $tx = shift;
+            my $code = $tx->res->code // 0;
+            print STDERR "[I$ii] ($code) from " . $tx->req->url . "\n" if $repo->verbosity;
+            return $next_repomd->() unless $code == 200;
+
+            my $dest = $cachedir . '/meta/' . ($repo->alias // 'noalias') . '/repomd.xml';
+            eval {
+                my $destdir = dirname($dest);
+                -d $destdir || mkpath($destdir) || die "Cannot create path {$destdir}";
+                $tx->res->content->asset->move_to($dest);
+                open(my $f, '<', $dest) or do {
+                    print STDERR "[WRN$ii] Error opening metadata file: $dest\n";
+                    shift @allgood;
+                    return Mojo::IOLoop->reset;
+                };
+                my $xf = solv::xfopen_fd($dest, fileno($f));
+                $repo->{cookie} = $repo->calc_cookie_fp($xf);
+                $repo->{handle}->add_repomdxml($xf, 0);
+                @urls = @{$repo->mirrors};
+                $next_primary->();
+            } or do {
+                print STDERR "[CRI] Cannot save $dest: $@\n";
+                shift @allgood;
+                return Mojo::IOLoop->reset;
+            };
+        };
+
+        $next_primary = sub {
+            my $baseurl = shift @urls;
+            return unless $repo && $repo->{handle} && $baseurl;
+            my ($filename1, $filechksum1) = $repo->find('primary');
+            my ($filename2, $filechksum2) = $repo->find('unpdateinfo') if $filename1;
+            my ($p_primary, $p_update, $p_meta);
+            unless ($filename2) {
+                $p_primary = $ua->get_p( $baseurl . '/' . $filename1)->then($wrap1, $catch_primary)->then($wrap, $catch_primary);
+            } else {
+                $p_primary = $ua->get_p( $baseurl . '/' . $filename1)->then($wrap1);
+                $p_update  = $ua->get_p( $baseurl . '/' . $filename2)->then($wrap1);
+                $p_meta = Mojo::Promise->all($p_primary, $p_update)->then($wrap, $catch_primary);
+            }
+        };
+
+        $wrap1 = sub {
+            my $tx = shift;
+            my $code = $tx->res->code // 0;
+            print STDERR "[I] loading primary ($code)\n" if $self->verbosity > 2;
+            return $next_primary->() unless $code == 200;
+            my $filename = Mojo::File->new($tx->req->url)->basename;
+            my $dest = $cachedir . '/meta/' . ($repo->alias // 'noalias') . '/' . $filename;
+            eval {
+                my $destdir = dirname($dest);
+                -d $destdir || mkpath($destdir) || die "Cannot create path {$destdir}";
+                $tx->res->content->asset->move_to($dest);
+                open(my $f, '<', $dest) or do {
+                    print STDERR "[WRN$ii] Error opening metadata file: $dest\n";
+                    shift @allgood;
+                    return Mojo::IOLoop->reset;
+                };
+                my $xf = solv::xfopen_fd($dest, fileno($f));
+                $repo->{handle}->add_rpmmd($xf, undef, 0)  if $dest =~ /primary.xml.+/;
+                $repo->{handle}->add_updateinfoxml($xf, 0) if $dest =~ /updateinfo.xml.+/;
+                1;
+            } or do {
+                print STDERR "[CRI] Cannot save $dest: $@\n";
+                shift @allgood;
+                return Mojo::IOLoop->reset;
+            };
+        };
+        $wrap = sub {
+            print STDERR "[I$ii] wrapping up\n" if $self->verbosity > 2;
+            return unless $repo;
+            $repo->add_exts();
+            $repo->writecachedrepo();
+            $repo->{handle}->create_stubs();
+            $repo->refresh_mirrors; # TODO this can be async as well
+            print STDERR "[I$ii] " . $repo->alias . " loaded\n";
+            while(1) {
+                $repo = shift @repos;
+                last if !$repo;
+                next if !$repo->enabled;
+                $repo->{handle} = $pool->add_repo($repo->{alias});
+                $repo->{handle}->{appdata} = $repo;
+                $repo->{handle}->{priority} = 99 - ($repo->{priority} // 0);
+                # first try to load from cache
+                next if Sypp::Repo::load($repo, $pool, $self->force);
+                print "\n";
+                STDOUT->flush();
+                @urls = @{$repo->mirrors};
+                last;
+            }
+            return $next_repomd->();
+        };
+
+        $catch_primary = sub {
+            my $err = shift // '<mpty>';
+            my $reponame = '<unknown>';
+            $reponame = $repo->alias if $repo && $repo->alias;
+            print STDERR "[WRN] error {$err} refreshing repo $reponame\n" if @allgood;
+            $next_primary->();
+        };
+
+        $catch = sub {
+            my $err = shift // '<mpty>';
+            print STDERR "[WRN] error {$err} from $url\n" if $self->verbosity && @allgood;
+            $next_repomd->();
+        };
+
+        $next_repomd->();
     }
+    Mojo::IOLoop->start;
+    Carp::croak "[INF] Critical error detected. Aborting\n" unless @allgood;
     $pool->addfileprovides();
     $pool->createwhatprovides();
     $pool->set_namespaceproviders($solv::NAMESPACE_LANGUAGE, $pool->Dep('de'), 1);
@@ -263,9 +421,7 @@ sub download {
             $next = sub {
                 unless ($p && @allgood) {
                     $current--;
-                    unless ($current) {
-                       Mojo::IOLoop->stop unless $current;
-                    }
+                    Mojo::IOLoop->stop unless $current;
                     return;
                 }
                 $url = shift @urls;

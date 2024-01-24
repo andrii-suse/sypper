@@ -22,7 +22,7 @@ echo http://$($ng1/print_address)/fardep
 echo http://$($ng2/print_address)/fardep
 ) > $sy/dt/zypper_root/etc/zypp/repos.d/fardep.mirrors
 
-$sy/download -v kmodtool
+$sy/download -vvv kmodtool
 
 ls -lRa $sy/cwd/cache/packages/ | grep kmodtool
 
