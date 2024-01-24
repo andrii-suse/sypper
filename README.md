@@ -11,6 +11,8 @@ It uses repositories description in .repo files, the same way as zypper does.
 
 `sypper download <package>` - download a package and required dependencies.
 
+`sypper refresh` - update local repositories metadata if needed.
+
 Use the following flags after `sypper download`:
 -v increase verbosity (may be specified multiple times);
 -c followed by number: set concurrency;
