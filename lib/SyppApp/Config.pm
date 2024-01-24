@@ -19,6 +19,7 @@ use Mojo::Base -base, -signatures;
 use Config::IniFiles;
 
 has repodirs => sub { [] };
+has cachedir => undef;
 
 sub refresh($self, $cfgfile=undef) {
     my $repodirs;
@@ -29,6 +30,11 @@ sub refresh($self, $cfgfile=undef) {
     }
     if ($repodirs) {
         @{$self->repodirs} = split /[:,\s]+/, $repodirs;
+    }
+    if (my $cachedir = $ENV{SYPP_CACHEDIR}) {
+        $self->cachedir($cachedir);
+    } elsif ( 0 == $> ) {
+        $self->cachedir('/var/cache/zypp'); # do not run sypper as root, but if you do - it will use zypp cache
     }
 }
 
