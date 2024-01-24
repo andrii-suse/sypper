@@ -7,8 +7,9 @@ It uses repositories description in .repo files, the same way as zypper does.
 
 ## Syntax
 
-sypper download - download packages required for system update
-sypper download <package> - download package and required dependencies
+`sypper download` - download packages required for system update.
+
+`sypper download <package>` - download a package and required dependencies.
 
 Use the following flags after `sypper download`:
 -v increase verbosity (may be specified multiple times);
