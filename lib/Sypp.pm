@@ -68,6 +68,7 @@ sub refresh_repos {
         next unless opendir($dir, $reposdir);
         for my $reponame (sort(grep {/\.repo$/} readdir($dir))) {
             my $cfg = new Config::IniFiles('-file' => "$reposdir/$reponame");
+            die "Problem parsing $reposdir/$reponame" unless $cfg;
             $self->app->log->error($self->dumper('PLUGIN::REPO', 'cfg', $cfg)) if $self->debug;
             for my $alias ($cfg->Sections()) {
                 my $repoattr = {'alias' => $alias, 'enabled' => 0, 'priority' => 99, 'autorefresh' => 1, 'type' => 'rpm-md', 'metadata_expire' => 900};
