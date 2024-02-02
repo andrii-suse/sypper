@@ -1,4 +1,4 @@
-FROM opensuse/tumbleweed
+FROM opensuse/leap
 ENV container docker
 
 ENV LANG en_US.UTF-8

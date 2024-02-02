@@ -24,6 +24,7 @@ use Carp ();
 
 use solv;
 
+use Mojo::DOM;
 use Mojo::Log;
 use Mojo::UserAgent;
 
@@ -32,6 +33,8 @@ use Sypp::Repo::Rpm;
 use Sypp::Repo::System;
 
 has repos     => sub { [] };
+has vars      => sub { {} };
+has vars_refreshed => undef; # is used for lazy var refresh
 has repodirs  => sub { Carp::croak 'repodirs are required' };
 has cachedir  => './cache/';
 
@@ -39,6 +42,7 @@ has pool      => sub { solv::Pool->new };
 has sysrepo   => sub { Carp::croak 'sysrepo is not initialized' };
 
 has concurrency => 4;
+has releasever  => undef;
 has log       => sub { Mojo::Log->new };
 has dumper    => sub { Carp::croak 'dumper is required if debug is enabled' };
 has force     => 0;
@@ -55,12 +59,81 @@ sub refresh {
     $self->pool || die 'Cannot init seolv::pool';
 }
 
+sub refresh_vars {
+    my $self = shift;
+
+    my ($arch, $releasever, $releasever_major, $releasever_minor);
+    if (-f '/etc/proc/sys/kernel/arch') {
+        $arch = Mojo::File->new('/proc/sys/kernel/arch')->slurp;
+        chomp $arch;
+    };
+
+    if (!$releasever && -f '/etc/products.d/baseproduct') {
+        eval {
+            my $file = Mojo::File->new('/etc/products.d/baseproduct');
+            my $dom  = Mojo::DOM->new($file->slurp);
+
+            my $root = $dom->find('product')->first;
+            $releasever = $root->find('version')->first->text;
+            $arch = $root->find('arch')->first unless $arch;
+        } or print STDERR '[WRN] cannot read baseproduct: ' + $@ + "\n";
+    }
+    if ($releasever) {
+        ($releasever_major,$releasever_minor) = split /\./, $releasever, 2;
+    }
+
+    my @reposdirs = @{$self->repodirs};
+    my %vars = (
+        arch => $arch,
+        basearch => $arch,
+        releasever => $releasever,
+        releasever_major => $releasever_major,
+        releasever_minor => $releasever_minor,
+    );
+
+    for my $reposdir (@reposdirs) {
+        my $varsdir = "$reposdir/../vars.d";
+        next unless -d $varsdir;
+        my $dir;
+        next unless opendir($dir, $varsdir);
+        while (readdir($dir)) {
+            my $vname = $_;
+            my $fname = "$varsdir/$vname";
+            next unless -f $fname;
+            my $vvalue = Mojo::File->new($fname)->slurp;
+            chomp $vvalue;
+            $vars{$vname} = $vvalue;
+        }
+    }
+    %{$self->vars} = %vars;
+    $self->vars_refreshed(1);
+}
+
+sub subst_vars {
+    my ($self, $v) = @_;
+    return $v unless -1 < index($v, '$');
+
+    unless ($self->vars_refreshed) {
+        $self->refresh_vars;
+    }
+
+    my %vars = %{$self->vars};
+
+    for my $var (sort keys %vars) {
+        next unless defined $vars{$var};
+        $v =~ s/\$$var/$vars{$var}/g;
+        $v =~ s/\$\{$var\}/$vars{$var}/g;
+    }
+    return $v;
+}
+
 sub refresh_repos {
     my $self = shift;
     my @repos;
     my @reposdirs = @{$self->repodirs};
     $self->log->error($self->dumper('PLUGIN::REPO', 'reposdirs', \@reposdirs)) if $self->debug;
 
+    $self->vars_refreshed(0);
     my $repo;
     for my $reposdir (@reposdirs) {
         next unless -d $reposdir;
@@ -73,7 +146,8 @@ sub refresh_repos {
             for my $alias ($cfg->Sections()) {
                 my $repoattr = {'alias' => $alias, 'enabled' => 0, 'priority' => 99, 'autorefresh' => 1, 'type' => 'rpm-md', 'metadata_expire' => 900};
                 for my $p ($cfg->Parameters($alias)) {
-                    $repoattr->{$p} = $cfg->val($alias, $p);
+                    my $val = $cfg->val($alias, $p);
+                    $repoattr->{$p} = $self->subst_vars($val);
                 }
                 $repo = undef;
                 if ($repoattr->{type} eq 'rpm-md') {
@@ -130,7 +204,7 @@ sub refresh_pool {
     my $current = 0;
     print STDERR "Refreshing repos with concurrency $concurrency\n" if $self->verbosity > 1;
     my $retry = 0;
-    my $ua = Mojo::UserAgent->new->connect_timeout(3)->request_timeout(10)->max_redirects(6);
+    my $ua = Mojo::UserAgent->new->connect_timeout(10)->request_timeout(60)->max_redirects(6);
     for (my $i = 0; $i < $concurrency; $i++) {
         my $repo;
         my @urls;
@@ -341,9 +415,10 @@ sub download {
             }
             my $sol;
             while (1) {
-                print "Please choose a solution: ";
+                print "Please choose a solution (default 1): ";
                 $sol = <STDIN>;
                 chomp $sol;
+                $sol = 1 unless defined $sol;
                 last if $sol eq 's' || $sol eq 'q' || ($sol =~ /^\d+$/ && $sol >= 1 && $sol <= @solutions);
             }
             next if $sol eq 's';
