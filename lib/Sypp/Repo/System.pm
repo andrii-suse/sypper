@@ -15,23 +15,30 @@
 
 package Sypp::Repo::System;
 use Mojo::Base 'Sypp::Repo';
+use Data::Dumper;
 
 sub load {
-    my ($self, $pool) = @_;
+    my ($self, $pool, $force) = @_;
 
     $self->{handle} = $pool->add_repo($self->alias);
     $self->{handle}->{appdata} = $self;
     $pool->{installed} = $self->{handle};
     print "rpm database: ";
     $self->{cookie} = $self->calc_cookie_file('/var/lib/rpm/Packages');
-    if ($self->usecachedrepo()) {
+    my $dorefresh = $force;
+    if (!$force) {
+        my $metadata_expire = $self->{metadata_expire} // 900;
+        my @s = stat($self->cachepath);
+        $dorefresh = 1 if !@s || ($metadata_expire != -1 && time() - $s[9] > $metadata_expire);
+    }
+    if (!$dorefresh && $self->usecachedrepo()) {
         print "cached\n";
         return 1;
-    } 
+    }
     print "reading\n";
     if (defined(&solv::Repo::add_products)) {
         $self->{handle}->add_products("/etc/products.d", $solv::Repo::REPO_NO_INTERNALIZE);
-    } 
+    }
     my $f = solv::xfopen($self->cachepath());
     $self->{handle}->add_rpmdb_reffp($f, $solv::Repo::REPO_REUSE_REPODATA);
     $self->writecachedrepo();
