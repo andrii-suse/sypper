@@ -197,7 +197,7 @@ sub refresh_pool {
     my $pool = $self->pool;
     $pool->setarch();
     # $pool->set_loadcallback(\&_load_stub); do not load filelists for now because they are too heavy
-    $self->sysrepo->load($pool);
+    $self->sysrepo->load($pool, $self->force);
     my $concurrency = $self->concurrency;
     my @allgood = (1);
     my @repos = @{$self->repos};
@@ -256,7 +256,7 @@ sub refresh_pool {
             print STDERR "[I$ii] ($code) from " . $tx->req->url . "\n" if $repo->verbosity;
             return $next_repomd->() unless $code == 200;
 
-            my $dest = $cachedir . '/meta/' . ($repo->alias // 'noalias') . '/repomd.xml';
+            my $dest = $repo->cacherootmeta . '/' . ($repo->alias // 'noalias') . '/repodata/repomd.xml';
             eval {
                 my $destdir = dirname($dest);
                 -d $destdir || mkpath($destdir) || die "Cannot create path {$destdir}";
@@ -299,7 +299,7 @@ sub refresh_pool {
             print STDERR "[I] loading primary ($code)\n" if $self->verbosity > 2;
             return $next_primary->() unless $code == 200;
             my $filename = Mojo::File->new($tx->req->url)->basename;
-            my $dest = $cachedir . '/meta/' . ($repo->alias // 'noalias') . '/' . $filename;
+            my $dest = $repo->cacherootmeta . '/' . ($repo->alias // 'noalias') . '/repodata/' . $filename;
             eval {
                 my $destdir = dirname($dest);
                 -d $destdir || mkpath($destdir) || die "Cannot create path {$destdir}";
@@ -310,8 +310,8 @@ sub refresh_pool {
                     return Mojo::IOLoop->reset;
                 };
                 my $xf = solv::xfopen_fd($dest, fileno($f));
-                $repo->{handle}->add_rpmmd($xf, undef, 0)  if $dest =~ /primary.xml.+/;
-                $repo->{handle}->add_updateinfoxml($xf, 0) if $dest =~ /updateinfo.xml.+/;
+                $repo->{handle}->add_rpmmd($xf, undef, 0)  if $dest =~ /primary.xml.*/;
+                $repo->{handle}->add_updateinfoxml($xf, 0) if $dest =~ /updateinfo.xml.*/;
                 1;
             } or do {
                 print STDERR "[CRI] Cannot save $dest: $@\n";
