@@ -49,6 +49,8 @@ has force     => 0;
 has debug     => 0;
 has verbosity => 0;
 
+has metadata_expire => int($ENV{SY_METADATA_EXPIRE} // 0) || 900;
+
 has version   => '';
 
 sub refresh {
@@ -144,7 +146,7 @@ sub refresh_repos {
             die "Problem parsing $reposdir/$reponame" unless $cfg;
             $self->app->log->error($self->dumper('PLUGIN::REPO', 'cfg', $cfg)) if $self->debug;
             for my $alias ($cfg->Sections()) {
-                my $repoattr = {'alias' => $alias, 'enabled' => 0, 'priority' => 99, 'autorefresh' => 1, 'type' => 'rpm-md', 'metadata_expire' => 900};
+                my $repoattr = {'alias' => $alias, 'enabled' => 0, 'priority' => 99, 'autorefresh' => 1, 'type' => 'rpm-md', 'metadata_expire' => ($self->metadata_expire)};
                 for my $p ($cfg->Parameters($alias)) {
                     my $val = $cfg->val($alias, $p);
                     $repoattr->{$p} = $self->subst_vars($val);
@@ -182,6 +184,7 @@ sub refresh_repos {
     @{$self->repos} = @repos;
 
     my $sysrepo = Sypp::Repo::System->new('@System', 'system');
+    $sysrepo->{metadata_expire} = $self->metadata_expire;
     $sysrepo->cacheroot($self->cachedir);
     $self->sysrepo($sysrepo);
 }
@@ -249,6 +252,7 @@ sub refresh_pool {
             print STDERR "[I$ii] trying $url\n" if $self->verbosity;
             return $ua->get_p($url)->then($then_repomd, $catch);
         };
+        my ($filename1, $filechksum1, $filename2, $filechksum2);
 
         $then_repomd = sub {
             my $tx = shift;
@@ -270,7 +274,30 @@ sub refresh_pool {
                 $repo->{cookie} = $repo->calc_cookie_fp($xf);
                 $repo->{handle}->add_repomdxml($xf, 0);
                 @urls = @{$repo->mirrors};
-                $next_primary->();
+                my ($dest_primary, $dest_updateinfo);
+                ($filename1, $filechksum1) = $repo->find('primary');
+                if ($filename1) {
+                    $dest_primary    = $repo->cacherootmeta . '/' . ($repo->alias // 'noalias') . '/' . $filename1;
+                    ($filename2, $filechksum2) = $repo->find('updateinfo');
+                    $dest_updateinfo = $repo->cacherootmeta . '/' . ($repo->alias // 'noalias') . '/' . $filename2 if $filename2;
+                } else {
+                    ($filename2, $filechksum2) = (undef, undef);
+                    $dest_updateinfo = '';
+                }
+                if (!$self->force && -e $dest_primary && (!$dest_updateinfo || -e $dest_updateinfo)) {
+                    print STDERR "[I$ii] skipping $filename1 (already cached)\n" if $self->verbosity;
+                    my $xf = solv::xfopen($dest_primary);
+                    $repo->{handle}->add_rpmmd($xf, undef, 0);
+                    if ($filename2) {
+                        print STDERR "[I$ii] skipping $filename2 (already cached)\n" if $self->verbosity;
+                        my $xfu = solv::xfopen($dest_updateinfo);
+                        $repo->{handle}->add_updateinfoxml($xfu, 0);
+                    }
+                    $wrap->();
+                } else {
+                    $next_primary->();
+                }
+                1;
             } or do {
                 print STDERR "[CRI] Cannot save $dest: $@\n";
                 shift @allgood;
@@ -281,13 +308,14 @@ sub refresh_pool {
         $next_primary = sub {
             my $baseurl = shift @urls;
             return unless $repo && $repo->{handle} && $baseurl;
-            my ($filename1, $filechksum1) = $repo->find('primary');
-            my ($filename2, $filechksum2) = $repo->find('unpdateinfo') if $filename1;
             my ($p_primary, $p_update, $p_meta);
             unless ($filename2) {
+                print STDERR "[I$ii] trying $baseurl/$filename1\n" if $self->verbosity;
                 $p_primary = $ua->get_p( $baseurl . '/' . $filename1)->then($wrap1, $catch_primary)->then($wrap, $catch_primary);
             } else {
+                print STDERR "[I$ii] trying $baseurl/$filename1\n" if $self->verbosity;
                 $p_primary = $ua->get_p( $baseurl . '/' . $filename1)->then($wrap1);
+                print STDERR "[I$ii] trying $baseurl/$filename2\n" if $self->verbosity;
                 $p_update  = $ua->get_p( $baseurl . '/' . $filename2)->then($wrap1);
                 $p_meta = Mojo::Promise->all($p_primary, $p_update)->then($wrap, $catch_primary);
             }
@@ -296,7 +324,7 @@ sub refresh_pool {
         $wrap1 = sub {
             my $tx = shift;
             my $code = $tx->res->code // 0;
-            print STDERR "[I] loading primary ($code)\n" if $self->verbosity > 2;
+            print STDERR "[I$ii] loading primary ($code)\n" if $self->verbosity > 2;
             return $next_primary->() unless $code == 200;
             my $filename = Mojo::File->new($tx->req->url)->basename;
             my $dest = $repo->cacherootmeta . '/' . ($repo->alias // 'noalias') . '/repodata/' . $filename;
@@ -482,6 +510,7 @@ sub download {
         my $concurrency = $self->concurrency;
         my $current = 0;
         printf "Downloading %d packages, %d K. Concurrency: %d\n", scalar(@newpkgs), $downloadsize / 1024, $concurrency;
+        my $nothingtodo = 1;
         for (my $i = 0; $i < $concurrency; $i++){
             my $p = shift @newpkgs;
             my $ii = $i;
@@ -498,6 +527,7 @@ sub download {
                 $p = shift @newpkgs;
             }
             next unless $p;
+            $nothingtodo = 0;
             my $url = shift @urls;
 
             $url = $url . '/' . $location;
@@ -566,9 +596,11 @@ sub download {
             print STDERR "[I$ii] trying $url\n" if $self->verbosity;
             $ua->get_p($url)->then($then, $catch);
         };
-        print "Starting poll\n" if $self->verbosity;
-        STDOUT->flush();
-        Mojo::IOLoop->start;
+        unless ($nothingtodo) {
+            print "Starting poll\n" if $self->verbosity;
+            STDOUT->flush();
+            Mojo::IOLoop->start;
+        }
         Carp::croak "[INF] Critical error detected. Aborting\n" unless @allgood;
         print "\n";
     }
