@@ -484,17 +484,27 @@ sub download {
         printf "Downloading %d packages, %d K. Concurrency: %d\n", scalar(@newpkgs), $downloadsize / 1024, $concurrency;
         for (my $i = 0; $i < $concurrency; $i++){
             my $p = shift @newpkgs;
+            my $ii = $i;
+            my ($repo, @urls, $location, $dest);
+            while ($p) {
+                $repo = $p->{repo}->{appdata};
+                @urls = @{$repo->mirrors};
+                ($location) = $p->lookup_location();
+                $dest = $self->cachedir . '/packages/' . ($repo->alias // 'noalias') . '/' . $location;
+
+                last if ($self->force || ! -e $dest);
+
+                print STDERR "[I$ii] skipping $location (already cached)\n" if $self->verbosity;
+                $p = shift @newpkgs;
+            }
             next unless $p;
-            my $repo = $p->{repo}->{appdata};
-            my @urls = @{$repo->mirrors};
             my $url = shift @urls;
-            my ($location) = $p->lookup_location();
+
             $url = $url . '/' . $location;
             my $ua = Mojo::UserAgent->new->request_timeout(300)->connect_timeout(4)->max_redirects(10);
             my ($next, $then, $catch);
             my $started = time();
             $current++;
-            my $ii = $i;
             $next = sub {
                 unless ($p && @allgood) {
                     $current--;
@@ -519,7 +529,6 @@ sub download {
                 my $code = $tx->res->code // 0;
                 print STDERR "[I$ii] ($code) from " . $tx->req->url . "\n" if $self->verbosity;
                 if ($code == 200) {
-                    my $dest = $self->cachedir . '/packages/' . ($repo->alias // 'noalias') . '/' . $location;
                     eval {
                         my $destdir = dirname($dest);
                         -d $destdir || mkpath($destdir) || die "Cannot create path {$destdir}";
@@ -532,10 +541,16 @@ sub download {
                     };
 
                     $p = shift @newpkgs;
-                    if ($p) {
+                    while ($p) {
                         $repo = $p->{repo}->{appdata};
                         @urls = @{$repo->mirrors};
                         ($location) = $p->lookup_location();
+                        $dest = $self->cachedir . '/packages/' . ($repo->alias // 'noalias') . '/' . $location;
+
+                        last if ($self->force || ! -e $dest);
+
+                        print STDERR "[I$ii] skipping $location (already cached)\n" if $self->verbosity;
+                        $p = shift @newpkgs;
                     }
                 }
                 $next->();

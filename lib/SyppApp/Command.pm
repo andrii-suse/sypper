@@ -44,7 +44,7 @@ sub eat {
     $self->app->sypp->concurrency($concurrency) if defined $concurrency;
     $self->app->sypp->force($force)             if defined $force;
 
-    @$args = @newargs if $verbosity || defined $concurrency;
+    @$args = @newargs if $verbosity || defined $concurrency || $force;
 }
 
 1;
