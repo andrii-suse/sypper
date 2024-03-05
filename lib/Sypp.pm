@@ -274,25 +274,14 @@ sub refresh_pool {
                 $repo->{cookie} = $repo->calc_cookie_fp($xf);
                 $repo->{handle}->add_repomdxml($xf, 0);
                 @urls = @{$repo->mirrors};
-                my ($dest_primary, $dest_updateinfo);
+                my $dest_primary;
                 ($filename1, $filechksum1) = $repo->find('primary');
-                if ($filename1) {
-                    $dest_primary    = $repo->cacherootmeta . '/' . ($repo->alias // 'noalias') . '/' . $filename1;
-                    ($filename2, $filechksum2) = $repo->find('updateinfo');
-                    $dest_updateinfo = $repo->cacherootmeta . '/' . ($repo->alias // 'noalias') . '/' . $filename2 if $filename2;
-                } else {
-                    ($filename2, $filechksum2) = (undef, undef);
-                    $dest_updateinfo = '';
-                }
-                if (!$self->force && -e $dest_primary && (!$dest_updateinfo || -e $dest_updateinfo)) {
+                die 'Cannot find primary.xml in ' . $repo->alias unless $filename1;
+                $dest_primary    = $repo->cacherootmeta . '/' . ($repo->alias // 'noalias') . '/' . $filename1;
+                if (!$self->force && -e $dest_primary) {
                     print STDERR "[I$ii] skipping $filename1 (already cached)\n" if $self->verbosity;
                     my $xf = solv::xfopen($dest_primary);
                     $repo->{handle}->add_rpmmd($xf, undef, 0);
-                    if ($filename2) {
-                        print STDERR "[I$ii] skipping $filename2 (already cached)\n" if $self->verbosity;
-                        my $xfu = solv::xfopen($dest_updateinfo);
-                        $repo->{handle}->add_updateinfoxml($xfu, 0);
-                    }
                     $wrap->();
                 } else {
                     $next_primary->();
@@ -324,7 +313,7 @@ sub refresh_pool {
         $wrap1 = sub {
             my $tx = shift;
             my $code = $tx->res->code // 0;
-            print STDERR "[I$ii] loading primary ($code)\n" if $self->verbosity > 2;
+            print STDERR "[I$ii] loading primary for " . $repo->alias . " ($code)\n" if $self->verbosity > 2;
             return $next_primary->() unless $code == 200;
             my $filename = Mojo::File->new($tx->req->url)->basename;
             my $dest = $repo->cacherootmeta . '/' . ($repo->alias // 'noalias') . '/repodata/' . $filename;
@@ -338,8 +327,7 @@ sub refresh_pool {
                     return Mojo::IOLoop->reset;
                 };
                 my $xf = solv::xfopen_fd($dest, fileno($f));
-                $repo->{handle}->add_rpmmd($xf, undef, 0)  if $dest =~ /primary.xml.*/;
-                $repo->{handle}->add_updateinfoxml($xf, 0) if $dest =~ /updateinfo.xml.*/;
+                $repo->{handle}->add_rpmmd($xf, undef, 0);
                 1;
             } or do {
                 print STDERR "[CRI] Cannot save $dest: $@\n";
