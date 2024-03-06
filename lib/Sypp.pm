@@ -221,7 +221,10 @@ sub refresh_pool {
             $repo->{handle}->{appdata} = $repo;
             $repo->{handle}->{priority} = 99 - ($repo->{priority} // 0);
             # first try to load from cache
-            next if Sypp::Repo::load($repo, $pool, $self->force);
+            if (Sypp::Repo::load($repo, $pool, $self->force)) {
+                $repo->refresh_mirrors;
+                next;
+            }
             print "\n";
             STDOUT->flush();
             @urls = @{$repo->mirrors};
@@ -351,7 +354,10 @@ sub refresh_pool {
                 $repo->{handle}->{appdata} = $repo;
                 $repo->{handle}->{priority} = 99 - ($repo->{priority} // 0);
                 # first try to load from cache
-                next if Sypp::Repo::load($repo, $pool, $self->force);
+                if (Sypp::Repo::load($repo, $pool, $self->force)) {
+                    $repo->refresh_mirrors;
+                    next;
+                }
                 print "\n";
                 STDOUT->flush();
                 @urls = @{$repo->mirrors};
@@ -562,6 +568,7 @@ sub download {
                     while ($p) {
                         $repo = $p->{repo}->{appdata};
                         @urls = @{$repo->mirrors};
+                        print STDERR "[I$ii] urls count: " . @urls . "\n" if $self->verbosity > 2;
                         ($location) = $p->lookup_location();
                         $dest = $self->cachedir . '/packages/' . ($repo->alias // 'noalias') . '/' . $location;
 
