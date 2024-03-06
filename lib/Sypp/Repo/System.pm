@@ -19,6 +19,7 @@ use Data::Dumper;
 
 sub load {
     my ($self, $pool, $force) = @_;
+    return 1 if $ENV{'SYPP_ROOT'};
 
     $self->{handle} = $pool->add_repo($self->alias);
     $self->{handle}->{appdata} = $self;
