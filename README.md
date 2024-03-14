@@ -16,7 +16,8 @@ It uses repositories description in .repo files, the same way as zypper does.
 Use the following flags after `sypper download`:
 -v increase verbosity (may be specified multiple times);
 -c followed by number: set concurrency;
--f force refresh of repositories.
+-n do not ask input for problems, automatically choose solution;
+-f force refresh of repositories and overwrite cached files.
 
 ## Use case 1 - regular user
 

@@ -48,6 +48,7 @@ has dumper    => sub { Carp::croak 'dumper is required if debug is enabled' };
 has force     => 0;
 has debug     => 0;
 has verbosity => 0;
+has interactive => 0;
 
 has metadata_expire => int($ENV{SY_METADATA_EXPIRE} // 0) || 900;
 
@@ -281,7 +282,7 @@ sub refresh_pool {
                 ($filename1, $filechksum1) = $repo->find('primary');
                 die 'Cannot find primary.xml in ' . $repo->alias unless $filename1;
                 $dest_primary    = $repo->cacherootmeta . '/' . ($repo->alias // 'noalias') . '/' . $filename1;
-                if (!$self->force && -e $dest_primary) {
+                if (!$self->force && ($filename1 ne 'repodata/primary.xml.gz') && -e $dest_primary) {
                     print STDERR "[I$ii] skipping $filename1 (already cached)\n" if $self->verbosity;
                     my $xf = solv::xfopen($dest_primary);
                     $repo->{handle}->add_rpmmd($xf, undef, 0);
@@ -421,6 +422,7 @@ sub download {
     my $solver = $pool->Solver();
     $solver->set_flag($solv::Solver::SOLVER_FLAG_SPLITPROVIDES, 1);
     $solver->set_flag($solv::Solver::SOLVER_FLAG_DUP_ALLOW_VENDORCHANGE, 0);
+    # $solver->set_flag($solv::Solver::SOLVER_FLAG_IGNORE_RECOMMENDED, 1);
     while (1) {
         my @problems = $solver->solve(\@jobs);
         last unless @problems;
@@ -436,12 +438,17 @@ sub download {
                 print "\n";
             }
             my $sol;
-            while (1) {
-                print "Please choose a solution (default 1): ";
-                $sol = <STDIN>;
-                chomp $sol;
-                $sol = 1 unless defined $sol;
-                last if $sol eq 's' || $sol eq 'q' || ($sol =~ /^\d+$/ && $sol >= 1 && $sol <= @solutions);
+            if ($self->interactive) {
+                while (1) {
+                    print "Please choose a solution (default 1): ";
+                    $sol = <STDIN>;
+                    die('Cannot deternime input, use -n flag?') unless defined $sol;
+                    chomp $sol;
+                    last if $sol eq 's' || $sol eq 'q' || ($sol =~ /^\d+$/ && $sol >= 1 && $sol <= @solutions);
+                }
+            } else {
+                print "Choosing solution 1...\n";
+                $sol = 1;
             }
             next if $sol eq 's';
             exit(1) if $sol eq 'q';
