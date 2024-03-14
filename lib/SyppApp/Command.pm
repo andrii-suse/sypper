@@ -19,9 +19,9 @@ use Mojo::Base 'Mojolicious::Command';
 sub eat {
     my ($self, $args) = @_;
     my @args = @$args;
-    my $verbosity;
-    my $concurrency;
+    my ($verbosity, $concurrency, $interactive);
     my $force;
+
     my @newargs;
 
     while (my $a = shift @args) {
@@ -34,6 +34,8 @@ sub eat {
             $verbosity = ($verbosity // 0) + $incr;
         } elsif ($a eq '-c' || $a eq '--concurrency') {
             $concurrency = eval {int(shift @args)};
+        } elsif ($a eq '-n' || $a eq '--non-interactive') {
+            $interactive = 0;
         } elsif ($a eq '-f' || $a eq '--force') {
             $force = 1;
         } else {
@@ -43,8 +45,10 @@ sub eat {
     $self->app->sypp->verbosity($verbosity)     if $verbosity;
     $self->app->sypp->concurrency($concurrency) if defined $concurrency;
     $self->app->sypp->force($force)             if defined $force;
+    $self->app->sypp->interactive($interactive) if defined $interactive;
+    $self->app->sypp->interactive(1)        unless defined $interactive;
 
-    @$args = @newargs if $verbosity || defined $concurrency || $force;
+    @$args = @newargs if $verbosity || defined $concurrency || $force || defined $interactive;
 }
 
 1;

@@ -7,5 +7,5 @@ set +a
 (
 cd __workdir/cwd
 
-perl __srcdir/script/sypper download "$@"
+perl __srcdir/script/sypper download -n "$@"
 )
