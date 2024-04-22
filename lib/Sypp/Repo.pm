@@ -57,6 +57,10 @@ sub new {
     if (my $urls = $self->baseurl) {
         @urls = split /[;,\s]+/, $urls;
     }
+    # add trailing space if needed
+    for my $url (@urls) {
+        $url = $url . '/' unless $url && '/' eq substr $url, -1;
+    }
     @{$self->urls} = @urls;
     @{$self->mirrors} = @urls;
 

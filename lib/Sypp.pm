@@ -166,6 +166,8 @@ sub refresh_repos {
                         if (open(my $fh, '<', $mirrorsfile)) {
                             while(my $line = <$fh>) {
                                 chomp $line;
+                                $line = $line . '/';
+                                $line =~ s!//$!/!;
                                 push @moremirrors, $line;
                             }
                         } else {
@@ -252,7 +254,7 @@ sub refresh_pool {
                 shift @allgood;
                 return Mojo::IOLoop->reset;
             }
-            $url = $url . '/repodata/repomd.xml';
+            $url = $url . 'repodata/repomd.xml';
             print STDERR "[I$ii] trying $url\n" if $self->verbosity;
             return $ua->get_p($url)->then($then_repomd, $catch);
         };
@@ -303,13 +305,13 @@ sub refresh_pool {
             return unless $repo && $repo->{handle} && $baseurl;
             my ($p_primary, $p_update, $p_meta);
             unless ($filename2) {
-                print STDERR "[I$ii] trying $baseurl/$filename1\n" if $self->verbosity;
-                $p_primary = $ua->get_p( $baseurl . '/' . $filename1)->then($wrap1, $catch_primary)->then($wrap, $catch_primary);
+                print STDERR "[I$ii] trying $baseurl$filename1\n" if $self->verbosity;
+                $p_primary = $ua->get_p( $baseurl . $filename1)->then($wrap1, $catch_primary)->then($wrap, $catch_primary);
             } else {
-                print STDERR "[I$ii] trying $baseurl/$filename1\n" if $self->verbosity;
-                $p_primary = $ua->get_p( $baseurl . '/' . $filename1)->then($wrap1);
-                print STDERR "[I$ii] trying $baseurl/$filename2\n" if $self->verbosity;
-                $p_update  = $ua->get_p( $baseurl . '/' . $filename2)->then($wrap1);
+                print STDERR "[I$ii] trying $baseurl$filename1\n" if $self->verbosity;
+                $p_primary = $ua->get_p( $baseurl . $filename1)->then($wrap1);
+                print STDERR "[I$ii] trying $baseurl$filename2\n" if $self->verbosity;
+                $p_update  = $ua->get_p( $baseurl . $filename2)->then($wrap1);
                 $p_meta = Mojo::Promise->all($p_primary, $p_update)->then($wrap, $catch_primary);
             }
         };
@@ -530,8 +532,7 @@ sub download {
             next unless $p;
             $nothingtodo = 0;
             my $url = shift @urls;
-
-            $url = $url . '/' . $location;
+            $url = $url . $location;
             my $ua = Mojo::UserAgent->new->request_timeout(300)->connect_timeout(4)->max_redirects(10);
             my ($next, $then, $catch);
             my $started = time();
@@ -548,7 +549,7 @@ sub download {
                     shift @allgood;
                     return Mojo::IOLoop->reset;
                 }
-                $url = $url . '/' . $location;
+                $url = $url . $location;
                 $started = time();
                 print STDERR "[I$ii] trying $url\n" if $self->verbosity;
                 return $ua->get_p($url)->then($then, $catch);
