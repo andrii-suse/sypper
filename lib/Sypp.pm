@@ -424,7 +424,7 @@ sub download {
     my $solver = $pool->Solver();
     $solver->set_flag($solv::Solver::SOLVER_FLAG_SPLITPROVIDES, 1);
     $solver->set_flag($solv::Solver::SOLVER_FLAG_DUP_ALLOW_VENDORCHANGE, 0);
-    # $solver->set_flag($solv::Solver::SOLVER_FLAG_IGNORE_RECOMMENDED, 1);
+    $solver->set_flag($solv::Solver::SOLVER_FLAG_IGNORE_RECOMMENDED, 1);
     while (1) {
         my @problems = $solver->solve(\@jobs);
         last unless @problems;
