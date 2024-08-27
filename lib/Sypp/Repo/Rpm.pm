@@ -138,7 +138,11 @@ sub refresh_mirrors {
     my $url = $baseurl . '/repodata/?mirrorlist';
     my $ua  = Mojo::UserAgent->new->max_redirects(5)->connect_timeout(2)->request_timeout(2);
     print STDERR "url " . $url . "\n" if $self->verbosity > 2;
-    my $res = $ua->get($url, {'User-Agent' => 'Sypp/refresh_mirrors'})->result;
+
+    my $res;
+    eval {
+        $res = $ua->get($url, {'User-Agent' => 'Sypp/refresh_mirrors'})->result;
+    };
     print STDERR "res: " . ($res && $res->code ? $res->code : "undef") . "\n" if $self->verbosity > 2;
     return undef unless $res && $res->code && $res->code < 300 && $res->code >= 200;
 
