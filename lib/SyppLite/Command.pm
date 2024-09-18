@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, see <http://www.gnu.org/licenses/>.
 
-package SyppApp::Command;
+package SyppLite::Command;
 use Mojo::Base 'Mojolicious::Command';
 
 sub eat {
@@ -29,6 +29,7 @@ sub eat {
         $incr++ if substr($a,0,2) eq "-v";
         $incr++ if substr($a,0,3) eq "-vv";
         $incr++ if substr($a,0,4) eq "-vvv";
+        $incr++ if substr($a,0,5) eq "-vvvv";
         $incr++ if $a eq "--verbose";
         if ($incr) {
             $verbosity = ($verbosity // 0) + $incr;
