@@ -85,7 +85,6 @@ sub get_requests {
     my $nothingtodo = 1; # for the case when everything is in the cache
     my $current = 0; # to track pending active concurrent requests
 
-
     print "[INF] Processing " . scalar(@requests) . " request(s)...\n" if $self->verbosity;
     my ($request, @files);
     $request = shift @requests;
@@ -125,6 +124,8 @@ sub get_requests {
                     print STDERR "[I$ii] skipping $file (already cached)\n" if $file_exists && $self->verbosity;
                     last unless $file_exists;
                     print STDERR "[I$ii] Picking next file in " . $request->alias .   " ...\n" if $self->verbosity;
+                    $file = shift @files;
+                    $dest = $self->cachedir . $request->subpath . '/' . $file if $file;
                 }
             }
             print STDERR "[I$ii] Selected file $file...\n" if $self->verbosity > 3 && $file;
