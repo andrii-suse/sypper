@@ -20,6 +20,11 @@ mkdir -p $sy/requests
 
     $sy/grab -vvv $sy/requests/test1.request
     ls -lRa $sy/cwd | grep kmodtool
+
+    # try again the same
+    out=$($sy/grab -vvv $sy/requests/test1.request 2>&1)
+
+    echo $out | grep -q 'already cached'
 )
 
 echo success
