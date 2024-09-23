@@ -96,6 +96,13 @@ sub get_requests {
         my $ii = $i;
         my (@urls, $file, $dest);
         @urls = $request->urls if $request; # each iteration should keep own copy of @urls
+                    # add some entropy
+                    my $head = @urls;
+                    $head = $self->concurrency if $head > $self->concurrency;
+                    $head = int(rand(int(rand(int(rand($head))))));
+                    if ($head > 1) {
+                        @urls[0..$head] = sort {rand()<=>rand()} @urls[0..$head];
+                    }
         # skip already cached files
         while (1) {
             print STDERR "[I$ii] No more requests\n" if !$request && $self->verbosity > 3;
@@ -110,6 +117,13 @@ sub get_requests {
                 if ($request) {
                     print STDERR "[I$ii] Looking into request " . $request->alias . "...\n" if $self->verbosity > 3;
                     @urls = $request->urls;
+                    # add some entropy
+                    my $head = @urls;
+                    $head = $self->concurrency if $head > $self->concurrency;
+                    $head = int(rand(int(rand(int(rand($head))))));
+                    if ($head > 1) {
+                        @urls[0..$head] = sort {rand()<=>rand()} @urls[0..$head];
+                    }
                     @files = @{$request->files};
                 }
                 next;
@@ -184,6 +198,13 @@ sub get_requests {
                         last;
                     }
                     @urls = $request->urls;
+                    # add some entropy
+                    my $head = @urls;
+                    $head = $self->concurrency if $head > $self->concurrency;
+                    $head = int(rand(int(rand(int(rand($head))))));
+                    if ($head > 1) {
+                        @urls[0..$head] = sort {rand()<=>rand()} @urls[0..$head]; 
+                    }
                     $file = shift @files;
                     print STDERR "[I$ii] Looking into file $file...\n" if $file && $self->verbosity > 3;
                     if (!$file) {
