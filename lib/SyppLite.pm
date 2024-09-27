@@ -32,17 +32,18 @@ use Sypp::Request;
 
 has concurrency => 4;
 has releasever  => undef;
+has interactive => 0;
 has log       => sub { Mojo::Log->new };
 has debug     => 0;
 has verbosity => 0;
 has force     => 0;
-has interactive => 0;
+has suffix    => undef;
 has cachedir  => '.';
 
 has version   => '';
 
 
-sub get {
+sub grab {
     my ($self, @args) = @_;
     my @requests = $self->build_requests(@args);
     my $ret = $self->get_requests(@requests);
@@ -84,6 +85,8 @@ sub get_requests {
     my @allgood = (1); # must use list to manupulate concurently, otherwise each promise may get own copy
     my $nothingtodo = 1; # for the case when everything is in the cache
     my $current = 0; # to track pending active concurrent requests
+    my $suffix = '';
+    $suffix = $self->suffix if $self->suffix;
 
     print "[INF] Processing " . scalar(@requests) . " request(s)...\n" if $self->verbosity;
     my ($request, @files);
@@ -129,7 +132,7 @@ sub get_requests {
                 next;
             }
             print STDERR "[I$ii] Looking into file $file...\n" if $self->verbosity > 3;
-            $dest = $self->cachedir . $request->subpath . '/' . $file;
+            $dest = $self->cachedir . $request->subpath . '/' . $file . $suffix;
             if (!$self->force) {
                 my $file_exists = 0;
                 while ($file) {
@@ -139,7 +142,7 @@ sub get_requests {
                     last unless $file_exists;
                     print STDERR "[I$ii] Picking next file in " . $request->alias .   " ...\n" if $self->verbosity;
                     $file = shift @files;
-                    $dest = $self->cachedir . $request->subpath . '/' . $file if $file;
+                    $dest = $self->cachedir . $request->subpath . '/' . $file . $suffix if $file;
                 }
             }
             print STDERR "[I$ii] Selected file $file...\n" if $self->verbosity > 3 && $file;
@@ -215,7 +218,7 @@ sub get_requests {
                         @files = @{$request->files};
                         next;
                     }
-                    $dest = $self->cachedir . $request->subpath . '/' . $file;
+                    $dest = $self->cachedir . $request->subpath . '/' . $file . $suffix;
 
                     if (!$self->force) {
                         my $file_exists = 0;
@@ -226,7 +229,7 @@ sub get_requests {
                             last unless $file_exists;
                             $file = shift @files;
                             last unless $file;
-                            $dest = $self->cachedir . $request->subpath . '/' . $file;
+                            $dest = $self->cachedir . $request->subpath . '/' . $file . $suffix;
                             print STDERR "[I$ii] Looking into file $file...\n" if $self->verbosity > 3 && $file;
                         }
                     }

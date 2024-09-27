@@ -21,6 +21,7 @@ sub eat {
     my @args = @$args;
     my ($verbosity, $concurrency, $interactive);
     my $force;
+    my $suffix;
 
     my @newargs;
 
@@ -39,17 +40,20 @@ sub eat {
             $interactive = 0;
         } elsif ($a eq '-f' || $a eq '--force') {
             $force = 1;
+        } elsif ($a eq '--suffix') {
+            $suffix = shift @args;
         } else {
             push @newargs, $a;
         }
     }
     $self->app->sypp->verbosity($verbosity)     if $verbosity;
+    $self->app->sypp->suffix($suffix)           if $suffix;
     $self->app->sypp->concurrency($concurrency) if defined $concurrency;
     $self->app->sypp->force($force)             if defined $force;
     $self->app->sypp->interactive($interactive) if defined $interactive;
     $self->app->sypp->interactive(1)        unless defined $interactive;
 
-    @$args = @newargs if $verbosity || defined $concurrency || $force || defined $interactive;
+    @$args = @newargs if $verbosity || defined $concurrency || $force || defined $interactive || $suffix;
 }
 
 1;

@@ -23,7 +23,7 @@ sub run {
     my ($self, @args) = @_;
     $self->eat(\@args);
 
-    $self->app->sypp->get(@args);
+    $self->app->sypp->grab(@args);
 }
 
 1;
